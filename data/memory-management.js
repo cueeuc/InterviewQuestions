@@ -1571,7 +1571,7 @@ int consume(void)
         point: "从存储位置、数据布局、缓冲复用、工具链四个方向压 RAM 的具体手段，以及各自的代价。",
         q: `<p>面试官：项目 RAM 已经用到 90%，硬件不能改，你从代码里还能挤出多少空间？按什么顺序下手？</p>`,
         exam: `<p>考察优化的系统性。能先看 map 文件定位大头、再分方向下手，比背一堆技巧更有说服力。</p>`,
-        core: `<p>第一步不是改代码而是看 map 文件，搞清 RAM 被谁占了：.data、.bss、heap、stack 各多少、哪几个符号最大。很多时候是某个 4KB 全局缓冲或字库表，定位到就解决一半。</p><p>四个方向按性价比：① 常量下沉到 Flash，字符串、查表、字库、配置表加 const 进 .rodata，只占 Flash 不占 RAM（要真 const，否则照样在 .data）；② 缓冲复用，接收、解析、DMA 缓冲生命周期不重叠时用 union 共用一块，双缓冲在低速场景降级成分块单缓冲，常能省几百字节到几 KB；③ 数据布局，结构体字段按大小降序排减少 padding，多个 bool 打包成位域或一个 uint16 的位，能用 uint8_t 就别用 int，对大数组尤其有效；④ 栈与堆，用高水位把任务栈从“拍脑袋的 1KB”收到实测值 +30%，堆用固定块池替 malloc、省元数据也避免碎片，去掉大局部数组和递归。</p><p>工具链还有：<code>-Os</code> 优化尺寸；<code>-ffunction-sections -fdata-sections</code> 配合 <code>--gc-sections</code> 删没被引用的函数和数据；用 newlib-nano 替标准库，光 printf 就能省几 KB，用 <code>%f</code> 打印浮点会拉进几十 KB 软浮点库，能不用就不用。架构层面：大只读表（字库、图片）放外部 SPI Flash/QSPI 并 XIP 执行，大缓冲放外部 SRAM，这属于改硬件方案。</p>`,
+        core: `<p>第一步看 map 文件搞清 RAM 被谁占了：.data、.bss、heap、stack 各多少、哪几个符号最大，往往一个 4KB 全局缓冲或字库表就是元凶。</p><p>四个方向：① 常量下沉 Flash，字符串、查表、字库、配置表加 const 进 .rodata（必须真 const，否则仍在 .data）；② 缓冲复用，生命周期不重叠的接收/解析/DMA 缓冲用 union 共用，低速场景双缓冲降级为分块单缓冲；③ 数据布局，结构体字段按大小从大到小排减少 padding，多个 bool 打包成位域，能用 uint8_t 别用 int；④ 栈与堆，用高水位把任务栈收到实测值 +30%，堆用固定块池替 malloc，去掉大局部数组和递归。</p><p>工具链：<code>-Os</code>；<code>-ffunction-sections -fdata-sections</code> + <code>--gc-sections</code> 删未引用代码；用 newlib-nano，printf 能省几 KB，用 <code>%f</code> 会拉进几十 KB 软浮点库。架构上大只读表放外部 Flash/QSPI XIP，大缓冲放外部 SRAM。</p>`,
         answer: `<p><b>第一步不是改代码，是看 map 文件</b>，搞清楚 RAM 到底被谁占了：.data、.bss、heap、stack 各多少，哪几个符号最大。很多时候是某个 4KB 的全局缓冲或一张字库表，定位到就解决一半。</p>
 <p><b>四个方向，按性价比排序：</b></p>
 <ul>

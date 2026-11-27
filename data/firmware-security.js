@@ -203,7 +203,7 @@ int image_verify(const img_hdr_t *h, const uint8_t *payload,
         point: "考察信任根、逐级验签、验签时机（跳转前）、防回滚计数，以及“不可变代码”在链中的作用。",
         q: `<p>面试官：<strong>Secure Boot 的信任链是怎么建立的？</strong>每一级验什么？<strong>验签到底放在哪一步？</strong>如果 Bootloader 被改了怎么办？</p>`,
         exam: `<p>信任链的核心是“信任根不可变，每一级在跳转前验证下一级”。能说清“验证必须在执行之前”“公钥哈希在 OTP”“Bootloader 自己被谁验证”，就说明你设计过启动流程。</p>`,
-        core: `<p>信任链必须有一个起点叫信任根（Root of Trust），通常是芯片内部固化不可修改的 Boot ROM，或带硬件保护的不可变 Bootloader。典型链路：Boot ROM（不可变）→ BL0 → BL1/Bootloader → APP，每一级跳转前验证下一级：读头部 → 校验 magic/长度 → 算哈希 → 用上一级持有的公钥验签 → 通过才跳转，失败停在安全状态（不执行、可进恢复模式）。</p><p>信任根怎么建立：Boot ROM 里固化代码，它的公钥哈希烧在 OTP/eFuse；上电时 ROM 用哈希验证 BL0 的公钥，再用公钥验证 BL0 的签名，因为 ROM 和 OTP 都改不了，整条链的起点就可信。</p><p>验签必须在执行之前：Bootloader 读 APP 头部固定偏移，检查 magic、长度、版本；对 APP 载荷算哈希（或边解密边算）；用公钥验签；通过后设 VTOR、MSP，跳转 APP 复位向量；失败则清“待启动”标志、记录故障、停在 Bootloader 等恢复。Bootloader 自己被改怎么办：靠上一级验证，BL0 验证 Bootloader、ROM 验证 BL0，所以 Bootloader 不能是“唯一可信”，必须有更底层不可变代码做信任根；没有 ROM 支持就把 Bootloader 放受读保护/写保护区域，并用 OTP 记录它的哈希。防回滚：在 OTP 或安全存储维护单调递增版本计数，验签时同时检查“固件版本 ≥ 计数”，防止刷回有漏洞的旧版本。</p>`,
+        core: `<p>信任根必须不可改：芯片内 Boot ROM，或受读/写保护的不可变 Bootloader。链路 Boot ROM → BL0 → Bootloader → APP，每级跳转前读下一级头部、校验 magic/长度、算哈希、用上一级公钥验签，失败就停在安全状态。</p><p>验签必须在执行之前：Bootloader 读 APP 头部（固定偏移），校验长度版本、算哈希、验签，通过后设 VTOR/MSP 跳到复位向量；失败则清待启动标志、记故障、留在 Bootloader。</p><p>Bootloader 自己靠上一级验证（ROM 验 BL0、BL0 验 Bootloader），无 ROM 时把 Bootloader 放保护区域并用 OTP 存哈希。防回滚：OTP 里维护单调递增版本计数，验签时检查“固件版本 ≥ 计数”。</p>`,
         answer: `<p><b>信任链的结构：</b>信任必须有一个起点，叫<b>信任根（Root of Trust）</b>。它通常是芯片内部固化、不可修改的 Boot ROM，或者带硬件保护的不可变 Bootloader。</p>
 <p>典型链路：</p>
 <p><code>Boot ROM（不可变） → BL0（一级引导） → BL1 / Bootloader → APP</code></p>
