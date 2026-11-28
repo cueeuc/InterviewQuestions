@@ -12,6 +12,11 @@
   padding: 0 20px;
 }
 
+/* 首页各大块之间留出呼吸间距，避免标题贴住上方卡片 */
+.wrap > section:not(.intro) {
+  margin-top: 34px;
+}
+
 .intro {
   margin-top: 26px;
   padding: 30px 28px;

@@ -77,6 +77,9 @@
   .intro { padding: 22px 18px; }
   .intro__title { font-size: 22px; }
   .intro__search { max-width: 100%; }
+  /* 手机端首页：搜索卡片与技术模块之间留白，别贴在一起 */
+  .wrap > section:not(.intro) { margin-top: 24px; }
+  .sec__title { margin-bottom: 12px; }
 
   .page-head { padding: 16px 16px; }
   .page-head__title { font-size: 19px; }
