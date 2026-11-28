@@ -29,7 +29,7 @@
         point: "应用层/核心/移植层的分工，display、indev、tick 三件套，以及 lv_timer_handler 的主循环。",
         q: `<p>面试官：LVGL 移植到一块新屏上，除了 lv_init 还要做什么？显示、触摸、时钟分别怎么接进去？</p>`,
         exam: `<p>考察是否真正移植过 LVGL，而不是只改过现成工程。能说清“显示驱动、输入驱动、tick、主循环”四件事，就很好。</p>`,
-        core: `<p>三层：应用层建 screen/obj、设样式、绑事件；核心层管对象树、样式、布局、动画、渲染、定时器、输入，不碰硬件；移植层就是显示、输入、tick、内存/日志等接口，需要你实现。</p><p><code>lv_init</code> 后四件事：① tick 时基，v8 在 SysTick 里 <code>lv_tick_inc(1)</code>，v9 用 <code>lv_tick_set_cb()</code> 注册毫秒函数；② 显示驱动，准备单/双缓冲并注册 flush_cb，搬完像素调 <code>lv_disp_flush_ready()</code>；③ 输入驱动，触摸/按键/编码器注册 <code>lv_indev</code> 并提供 read_cb；④ 主循环周期调 <code>lv_timer_handler()</code>，5~30ms 一次。</p><p>v8 用 <code>lv_disp_drv_t</code>/<code>lv_indev_drv_t</code>，v9 改为 <code>lv_display_t</code>/<code>lv_indev_t</code>。裸机放 while(1)，RTOS 建独立 GUI 任务、优先级别太高、栈要够；所有 LVGL 调用必须在同一任务，跨任务加锁。</p>`,
+        core: `<p>LVGL 分应用层、核心层和移植层；移植要做 tick、display flush_cb、input read_cb，并在主循环或 GUI 任务里周期调 lv_timer_handler。</p>`,
         answer: `<p><b>LVGL 分三层：</b></p>
 <ul>
 <li><b>应用层</b>：创建 screen/obj、设置样式、绑定事件、写业务逻辑。</li>
@@ -163,7 +163,7 @@ void lvgl_port_init(void)
         point: "POINTER 类型、read_cb 的坐标/状态语义、坐标变换与校准、滤波和非阻塞读取。",
         q: `<p>面试官：触摸屏接到 LVGL，read_cb 里要填什么？为什么点按钮总是偏？中断引脚怎么用？</p>`,
         exam: `<p>考察触摸接入的细节。能说清“坐标 + 按下状态”“校准/旋转/镜像”“不要在 read_cb 里阻塞”，就很好。</p>`,
-        core: `<p>触摸屏注册为 <code>LV_INDEV_TYPE_POINTER</code>，LVGL 周期调 read_cb。read_cb 是 void，每次给出最新一帧：<code>data-&gt;point.x/y</code> 是屏幕坐标，<code>data-&gt;state</code> 是 PRESSED/RELEASED。常见错误是只更坐标不更状态——松手仍报 PRESSED 会一直按下；只报 RELEASED 不更坐标，抬起会定位到旧点。</p><p>坐标不准：触摸原始值（如 0~4095）要线性映射到 LCD 分辨率；旋转后要 swap_xy/mirror_x/mirror_y；电阻屏要两点或三点校准求 offset 和 scale，电容屏边缘也可能偏，装配公差要加固定 offset。</p><p>校准就是显示四个角点、记录原始坐标，拟合 <code>x_lcd = a*x_raw + b</code>、<code>y_lcd = c*y_raw + d</code>，参数存 Flash 开机加载。INT 引脚可唤醒 GUI 任务，但 ISR 里不要调 LVGL；read_cb 读 I2C 不能死等，没响应直接返回 RELEASED。</p>`,
+        core: `<p>触摸 read_cb 要填坐标和 PRESSED/RELEASED 状态；坐标要按分辨率线性映射，旋转要 swap/镜像，电阻屏还要两点校准并存 Flash。</p>`,
         answer: `<p><b>注册输入设备：</b>触摸屏是 <code>LV_INDEV_TYPE_POINTER</code>，注册后 LVGL 周期性调用 <code>read_cb</code>。</p>
 <p><b>read_cb 要填两样东西：</b></p>
 <ul>
@@ -313,7 +313,7 @@ void touch_indev_init(void)
         point: "group + focus + KEYPAD/ENCODER 输入，LV_KEY_* 映射，以及 ISR 与 LVGL 的边界。",
         q: `<p>面试官：产品没有触摸屏，只有几个实体按键，怎么用 LVGL 做菜单导航和按钮确认？</p>`,
         exam: `<p>考察 LVGL 的 group/焦点机制。能说清“按键是输入设备、按钮要加入 group、焦点决定谁响应”，就很好。</p>`,
-        core: `<p>三件套：group、focus、input device。用 <code>lv_group_create()</code> 建组、<code>lv_group_add_obj()</code> 加入控件；按键注册 <code>LV_INDEV_TYPE_KEYPAD</code>、编码器注册 <code>LV_INDEV_TYPE_ENCODER</code>，再用 <code>lv_indev_set_group()</code> 绑定；组内同时只有一个对象有焦点，NEXT/PREV 切焦点、ENTER 触发点击。</p><p>read_cb：KEYPAD 填 <code>data-&gt;key</code>（NEXT/PREV/ENTER/ESC/方向）和 <code>data-&gt;state</code>（PRESSED/RELEASED，无按键返回 RELEASED）；ENCODER 填 <code>data-&gt;enc_diff</code>（旋转格数，正负），按下时 state=PRESSED、key=ENTER。</p><p>事件：加入 group 的按钮 ENTER 自动触发 <code>LV_EVENT_CLICKED</code>，只需绑点击回调；自定义按键绑 <code>LV_EVENT_KEY</code> 处理 <code>lv_event_get_key()</code>。ISR 里不能调 LVGL，只能置标志或发队列，read 和 <code>lv_timer_handler</code> 都在 GUI 任务里；切页后 <code>lv_group_focus_obj()</code> 归位，删除对象前先从 group 移除。</p>`,
+        core: `<p>按键和编码器要建 group、加控件、注册 KEYPAD/ENCODER 输入设备并关联；焦点切换用 NEXT/PREV，ENTER 触发点击，页面切换后要重设焦点。</p>`,
         answer: `<p><b>核心三件套：group、focus、input device。</b></p>
 <ol>
 <li><b>创建 group</b>：<code>lv_group_t *g = lv_group_create();</code>，把需要键盘/编码器操作的控件（按钮、滑块、下拉框）用 <code>lv_group_add_obj(g, btn)</code> 加进去。</li>
@@ -456,7 +456,7 @@ void menu_init(void)
         point: "用 CPU 占用和 flush 时间区分渲染瓶颈与传输瓶颈，再分别优化缓冲、DMA、SPI 和绘制复杂度。",
         q: `<p>面试官：LVGL 界面滑动很卡，你怎么定位是 MCU 画得慢，还是屏幕刷得慢？分别怎么优化？</p>`,
         exam: `<p>考察性能分析思路。能说清“低 CPU 低 FPS 是传输瓶颈，高 CPU 低 FPS 是渲染瓶颈”，并给出对应手段，就很好。</p>`,
-        core: `<p>先分两段：渲染是 LVGL 在 draw buffer 里画图形文字，耗 CPU；刷屏是把 buffer 经 SPI/并口/DMA 搬到屏，耗总线。判断方法：在 flush_cb 前后打点，统计刷新耗时和每秒刷新面积；CPU 低但 FPS 低说明在等传输或等 VSYNC，CPU 高但 FPS 低是渲染慢。</p><p>传输瓶颈：提高 SPI 时钟（先确认屏控制器上限）；DMA + 双缓冲，启动传输就返回、完成再 <code>flush_ready</code>；只刷脏矩形，频繁整屏 invalidate 会退化成全屏；RGB565 比 ARGB8888 少一半数据；大屏用并口/FMC。</p><p>渲染瓶颈：去掉透明、阴影、渐变、圆角抗锯齿；图片预转 LVGL 原生格式，别运行期解 JPEG/PNG；减少对象数量、复用对象；文字用内置字体、少用大字号；复杂背景做成一张图。现实预期：F103 + SPI 屏 10~20fps 已不错，F4/H7 带 DMA/并口 30~60fps。</p>`,
+        core: `<p>先分清渲染慢还是刷屏慢：flush 前后打点、看 CPU 占用；传输瓶颈升 SPI、上 DMA 双缓冲、局部刷新，渲染瓶颈去阴影/透明、复用对象、预解码图片。</p>`,
         answer: `<p><b>先分清两个阶段：</b></p>
 <ol>
 <li><b>渲染（render）</b>：LVGL 在 draw buffer 里画矩形、文字、图片，消耗 CPU。</li>

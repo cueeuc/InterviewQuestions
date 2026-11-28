@@ -29,7 +29,7 @@
         point: "Broker 解耦发布者与订阅者、长连接双向通信、主题路由，与 HTTP 请求响应/轮询的差异。",
         q: `<p>面试官：讲一下 MQTT 的通信模型。设备上报数据为什么常用 MQTT，而不是直接 HTTP 轮询？两者本质区别在哪？</p>`,
         exam: `<p>考察对物联网通信选型的理解。能说清“Broker 解耦、长连接、主题路由、双向推送”，而不是只背“MQTT 轻量”，就很好。</p>`,
-        core: `<p>MQTT 是发布/订阅，中间有 Broker：设备把消息发到某个 Topic，不关心谁在听；Broker 按订阅关系转发，支持 <code>+</code> 匹配一层、<code>#</code> 匹配多层。发布者和订阅者在空间、时间、数量上都解耦。</p><p>HTTP 是请求/响应，客户端主动请求、服务器返回，一个请求对一个响应，服务器不能主动推（除非长轮询、SSE、WebSocket）。设备要拿指令只能轮询：间隔短浪费流量和电，间隔长指令延迟大。</p><p>本质区别：MQTT 一条长连接、双向、固定头最小 2 字节、按 Topic 由 Broker 路由、有 QoS/遗嘱/保留；HTTP 默认短连接、单向、每个请求带几百字节头部、按 URL 路由、只有 TCP 可靠性。设备遥测、远程控制、多端订阅用 MQTT；一次性查询、文件上传下载、REST 接口用 HTTP；浏览器实时用 WebSocket。</p>`,
+        core: `<p>MQTT 是发布订阅、经 Broker 路由、长连接双向；HTTP 是请求响应、短连接单向，设备要收指令只能轮询；遥测和控制用 MQTT，一次性查询用 HTTP。</p>`,
         answer: `<p><b>MQTT 是发布/订阅模型，中间有一个 Broker：</b></p>
 <ul>
 <li>设备作为 <b>Publisher</b> 把消息发到某个 <b>Topic</b>，例如 <code>dev/123/temp</code>；</li>
@@ -120,7 +120,7 @@ void app_mqtt_start(void)
         point: "PINGREQ/PINGRESP、1.5 倍超时、NAT 超时与功耗的权衡，以及它和应用层心跳的区别。",
         q: `<p>面试官：MQTT 连接上的“心跳包”是什么？你项目里多久发一次？它和 TCP 的 Keep-Alive 有什么区别？</p>`,
         exam: `<p>考察实际联网经验。能说出“1.5 倍 Keep Alive 超时”“要小于 NAT 老化时间”“心跳不等于业务心跳”，就说明调过线上连接。</p>`,
-        core: `<p>Keep Alive 是 CONNECT 里带的秒数：客户端在该时间内没发过任何控制报文就必须发 <code>PINGREQ</code>，Broker 回 <code>PINGRESP</code>；Broker 在 1.5 倍 Keep Alive 内没收到任何报文就认为连接已死，关闭连接并发布遗嘱。</p><p>它解决 TCP 半开连接：拔网线、掉电、NAT 表项老化时双方收不到 FIN/RST，连接“假在线”，应用层 PING 能在一个可控时间内发现。</p><p>常见 30~120 秒：局域网/Wi-Fi 可用 60 秒，蜂窝可放宽到 120~300 秒省电省流量；必须小于链路 NAT/防火墙的老化时间（很多家用路由器 2~5 分钟）。电池设备要权衡心跳耗电和离线发现速度。TCP Keep-Alive 是内核级的、默认常是 2 小时且常被关，不能指望它维持 MQTT 在线；版本、电量这类业务状态应另走应用层上报。</p>`,
+        core: `<p>Keep Alive 是客户端多久没发报文就必须发 PINGREQ，Broker 在 1.5 倍时间内没收到就判定断线并发布遗嘱，用来发现 TCP 半开连接。</p>`,
         answer: `<p><b>MQTT 的 Keep Alive 是客户端在 CONNECT 报文里带的一个时间间隔（秒）。</b>规则是：如果客户端在 <code>Keep Alive</code> 时间内没有向 Broker 发送任何其它控制报文（PUBLISH、SUBSCRIBE 等），就必须发一个 <code>PINGREQ</code>；Broker 回 <code>PINGRESP</code>。如果 Broker 在 <b>1.5 倍 Keep Alive</b> 内没有收到客户端的任何报文，就认为连接已死，关闭连接并发布遗嘱消息。</p>
 <p><b>它解决什么问题：</b>TCP 连接在物理断开（拔网线、设备掉电、NAT 表项老化）时，双方可能都收不到 FIN/RST，连接会“假在线”。Keep Alive 用应用层的 PING 探测，能在一个可控的时间内发现半开连接。</p>
 <p><b>多久发一次：</b></p>
@@ -209,7 +209,7 @@ void app_heartbeat_task(void *arg)
         point: "802.11 MAC 帧的 Frame Control、三个地址、序列号、Frame Body 与 FCS，以及数据帧如何承载 IP。",
         q: `<p>面试官：Wi-Fi 发出去的数据包，在空口上的格式是什么样的？帧头里都有哪些字段？设备连上路由器后，数据是怎么装进 802.11 帧里的？</p>`,
         exam: `<p>考察是否理解 Wi-Fi 不是“无线网线”那么简单。能画出 802.11 MAC 头、说清三个地址的含义，就很加分。</p>`,
-        core: `<p>802.11 MAC 帧：Frame Control 2B（协议版本、类型管理/控制/数据、子类型、ToDS/FromDS、重传、省电等）、Duration/ID 2B（虚拟载波监听占用时长）、Address1/2/3 各 6B、Sequence Control 2B、可选 QoS Control 2B、可选 HT Control 4B、Frame Body（管理帧放 IE，数据帧放 LLC/SNAP + 上层 IP 包）、FCS 4B（CRC-32，校验失败直接丢）。</p><p>基础设施模式下三个地址：STA→AP（ToDS=1）时 Address1 是 AP 的 BSSID（接收者）、Address2 是 STA（发送者）、Address3 是最终目的；AP→STA（FromDS=1）时 Address1 是目的 STA、Address2 是 AP 的 BSSID、Address3 是源地址。WDS/4 地址模式才用 Address4，家用网络用不到。</p><p>数据封装：TCP/UDP 包加 IP 头后放进 Frame Body，前面 8 字节 LLC/SNAP 标识 IPv4/IPv6；AP 在无线帧和以太网帧之间转换。管理帧（Beacon、Probe、Auth、Assoc）负责发现接入，控制帧（RTS/CTS/ACK/Block Ack）负责信道协调。</p>`,
+        core: `<p>802.11 数据帧头有帧控制、时长、三个地址、序号和 FCS；基础架构模式下 Address1 是接收者、Address2 是发送者、Address3 是最终源或目的。</p>`,
         answer: `<p>Wi-Fi 的链路层帧叫 <b>802.11 MAC 帧</b>，结构如下（括号内为字节数）：</p>
 <ul>
 <li><b>Frame Control（2）</b>：协议版本（2 位）、类型（2 位：管理/控制/数据）、子类型（4 位，Beacon、Probe、Data 等）、ToDS/FromDS、More Fragments、Retry、Power Management、More Data、Protected Frame、Order。</li>
@@ -302,7 +302,7 @@ int tcp_connect_example(void)
         point: "2.4GHz 信道重叠与 1/6/11 非重叠组合、5GHz 的频谱优势，以及频段/版本/穿墙/干扰的取舍。",
         q: `<p>面试官：Wi-Fi 为什么总说信道 1、6、11？2.4GHz 和 5GHz 有什么区别？你的产品用哪个频段，为什么？</p>`,
         exam: `<p>考察无线基础知识。能说清“20MHz 带宽、5MHz 间隔导致重叠”“5GHz 信道多但穿墙差”，并联系到产品选型，就很好。</p>`,
-        core: `<p>2.4GHz 约 2400~2483.5MHz，13 个信道名义 20MHz 但间隔只有 5MHz，相邻严重重叠；真正互不干扰的是 1/6/11（2412/2437/2462MHz，间隔 25MHz），也有 2/7/12、3/8/13 的组合。</p><p>5GHz 频谱宽、20MHz 信道可完全不重叠，信道多干扰少，支持 80/160MHz 绑定速率更高，但穿墙绕射差、覆盖半径小，部分信道是 DFS 雷达频段，检测到雷达要切信道可能短暂断网。</p><p>选择：IoT/低功耗设备绝大多数 Wi-Fi SoC 只支持 2.4GHz，成本低、穿墙好；视频和高吞吐优先 5GHz；BLE 共存时能上 5GHz 就上；2.4GHz 不要开 40MHz 绑定，总共才 80MHz，占掉大半频段干扰反而更重。</p>`,
+        core: `<p>2.4GHz 只有 1/6/11 三个互不重叠的 20MHz 信道，5GHz 信道多、干扰少但穿墙差；IoT 多用 2.4G，视频和高吞吐优先 5G。</p>`,
         answer: `<p><b>2.4GHz 频段：</b>频率范围约 2400~2483.5MHz，通常划分 13 个信道（部分地区 14 个），每个信道<b>名义带宽 20MHz</b>，但信道间隔只有 <b>5MHz</b>，所以相邻信道严重重叠。真正互不干扰的组合是 <b>1、6、11</b>（中心频率 2412、2437、2462MHz），三者间隔 25MHz，刚好容纳 20MHz 带宽。也有 2/7/12、3/8/13 的组合，但在国内常用 1/6/11。</p>
 <p><b>5GHz 频段：</b>频谱宽得多，20MHz 信道可以做到互不重叠，常见 36~48、52~64、100~144、149~165。信道多、干扰少，支持 80MHz/160MHz 绑定，速率更高。代价是频率高、波长短，穿墙和绕射能力差，覆盖半径小；部分信道是 DFS（雷达频段），AP 检测到雷达信号必须切换信道，可能造成短暂断网。</p>
 <p><b>怎么选：</b></p>
@@ -396,7 +396,7 @@ int pick_best_channel(const wifi_ap_record_t *list, int n)
         point: "单射频时分共存、共存仲裁、BLE AFH、Wi-Fi 重传，以及天线隔离和参数取舍。",
         q: `<p>面试官：用 ESP32 同时跑 Wi-Fi 和 BLE，两者都在 2.4GHz，会不会互相干扰？你是怎么优化共存问题的？</p>`,
         exam: `<p>考察无线共存的实际经验。能说清“单射频时分复用、共存仲裁、AFH、天线隔离”，而不是笼统说“错开频率”，就到位了。</p>`,
-        core: `<p>会干扰且无法完全避免：两者都在 2.4GHz ISM，BLE 的 40 个 2MHz 信道和 Wi-Fi 的 20MHz 信道在频谱上重叠。单射频 SoC 只有一套 2.4G 收发链路，只能分时共用；双射频/Combo 芯片需要共存仲裁和滤波。</p><p>芯片层做的事：TDM 共存仲裁按优先级分时间片（Beacon、ACK 通常优先，BLE 连接事件会被推迟）；BLE AFH 把被 Wi-Fi 占用或干扰重的信道标为坏信道，跳频时避开；Wi-Fi MAC 有 ACK 重传；Combo 芯片用 request/grant 硬件信号协调，软件可配 Wi-Fi 优先、BLE 优先或平衡。</p><p>工程优化：Wi-Fi 尽量上 5GHz；2.4G 选 1/6/11 中较空闲的信道（BLE 广播固定在 37/38/39 改不了）；降低 BLE 占空比（加大连接间隔、用 slave latency、降低广播频率、批量发送）；降低 Wi-Fi 空口占用；天线拉开距离、正交极化、隔离度做到 15dB 以上。注意“调 FSK 参数优化共存”不是通用方案，FSK/GFSK 是 BLE 调制方式，改它解决不了同频段时分争用。</p>`,
+        core: `<p>BLE 和 Wi-Fi 都在 2.4GHz，单射频芯片只能分时共存；靠 TDM 仲裁、BLE AFH 避干扰和 Wi-Fi 重传缓解，工程上让 Wi-Fi 上 5G、降低 BLE 占空比。</p>`,
         answer: `<p><b>会干扰，而且无法完全避免。</b>Wi-Fi 和 BLE 都在 2.4GHz ISM 频段，BLE 的 40 个信道（2MHz 间隔）和 Wi-Fi 的 20MHz 信道在频谱上重叠。单射频 SoC（如 ESP32）只有一套 2.4GHz 收发链路，Wi-Fi 和 BLE 只能<b>分时共用</b>；双射频/Combo 芯片则需要共存仲裁和滤波。</p>
 <p><b>芯片/协议层做了什么：</b></p>
 <ul>
@@ -499,7 +499,7 @@ void ble_slow_advertising(void)
         point: "Broker 地址、三元组身份、ClientID/Username/Password 的生成、TLS、Topic 权限与设备创建/激活流程。",
         q: `<p>面试官：你项目里设备连的是什么服务器？怎么连的？云平台给的 ProductKey、DeviceName、DeviceSecret 分别是什么，怎么变成 MQTT 的连接参数？</p>`,
         exam: `<p>考察是否真的做过云平台接入，而不是只会本地 Broker。能说清三元组、动态签名、TLS 和 Topic 权限，就很好。</p>`,
-        core: `<p>两层要分开：MQTT 只需要 Broker、端口、ClientID、Username、Password；三元组是用来生成这些参数的。ProductKey 是产品标识，DeviceName 是产品内设备唯一名，DeviceSecret 是每台设备唯一的密钥、出厂烧录不能泄露。</p><p>连接参数：Broker 如 <code>xxx.iot-as-mqtt.cn-shanghai.aliyuncs.com</code>，1883 明文、8883 TLS（量产必须 TLS）；ClientID 常由 DeviceName + securemode + signmethod + timestamp 组成且全局唯一，重复会把前一个踢下线；Username 常见 <code>DeviceName&amp;ProductKey</code>；Password 用 DeviceSecret 对规定字段做 HMAC-SHA256/MD5 签名。</p><p>流程：建产品（品类、直连/网关、JSON/透传）→ 加设备拿三元组 → 定义物模型和 Topic → 写入设备 → 对时、TLS、CONNECT、订阅、上报。DeviceSecret 放 OTP 或安全芯片，一机一密，校验服务器证书。</p>`,
+        core: `<p>阿里云三元组里 ProductKey 标识产品、DeviceName 是设备名、DeviceSecret 是每台设备唯一的密钥；Broker 地址、ClientID 和签名密码由它们生成，DeviceSecret 不能泄露。</p>`,
         answer: `<p><b>先分清两层：</b>MQTT 连接本身只需要 Broker 地址、端口、ClientID、Username、Password；云平台的“三元组”是用来<b>生成</b>这些参数的，不是直接填进去的。</p>
 <p><b>三元组：</b></p>
 <ul>
@@ -627,7 +627,7 @@ int iot_mqtt_connect(const iot_identity_t *id)
         point: "三种睡眠的功耗/连接保持/唤醒延迟差异，DTIM 与 Wake-on-WLAN，以及唤醒后的重连成本。",
         q: `<p>面试官：Wi-Fi 设备怎么做到低功耗？休眠以后靠什么唤醒？Modem sleep、Light sleep、Deep sleep 分别牺牲了什么？</p>`,
         exam: `<p>考察实际低功耗产品经验。能说清“保连接”和“省电”的矛盾、DTIM 的作用、深睡后要重连，就很好。</p>`,
-        core: `<p>Modem sleep：CPU 正常跑，Wi-Fi 射频在 Beacon 之间关闭、按 DTIM 醒来收广播，连接和 IP 都保持，唤醒延迟最低，电流几 mA 到几十 mA，适合一直在线、偶尔收发。</p><p>Light sleep：CPU、外设、射频大部分时钟关闭，但 RAM 和 Wi-Fi 连接状态保留，ESP32 可在 DTIM 前自动醒来收 Beacon 再睡，电流几百 µA、唤醒毫秒级，适合电池供电但要保持在线、数据不频繁的设备。</p><p>Deep sleep：除 RTC/ULP 外几乎全断电，RAM 不保留（可选 RTC 内存），Wi-Fi 断开、IP 丢失，电流几 µA；唤醒相当于复位，要重新初始化、联网、重连 MQTT/TLS，适合几十分钟上报一次的传感器。唤醒源有 RTC 定时器、GPIO 中断、UART/触摸/ULP；普通 MQTT 下行不能可靠唤醒深睡设备。深睡最省，但每次唤醒都要重新联网和 TLS 握手，周期太短反而不划算，要按“上报周期 × 单次唤醒成本”算总账。</p>`,
+        core: `<p>ESP32 的 Modem sleep 只关射频、连接保持；Light sleep 关大部分时钟但保留 RAM 和 Wi-Fi 状态；Deep sleep 几乎全断电、唤醒相当于复位，要重新联网。</p>`,
         answer: `<p><b>三种睡眠，核心区别是“断电断到什么程度”：</b></p>
 <ul>
 <li><b>Modem sleep（射频休眠）</b>：CPU 正常运行，Wi-Fi 射频在 Beacon 之间关闭，按 DTIM 周期醒来收一次广播。连接和 IP 都保持，唤醒延迟最低。电流通常在几 mA 到几十 mA，适合“一直在线、偶尔收发”的设备。</li>

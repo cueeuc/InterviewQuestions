@@ -44,7 +44,7 @@
         point: "地址空间划分、特权级切换、系统调用入口与参数传递。",
         q: `<p>面试官：Linux 为什么要把<strong>内核空间和用户空间</strong>分开？用户程序调用 <code>read()</code> 时，到底发生了什么？驱动为什么要用 <code>copy_to_user</code> 而不能直接 memcpy？</p>`,
         exam: `<p>考察对操作系统保护机制的理解。能说清“特权级切换、地址空间隔离、系统调用是唯一入口、用户指针不可信”，说明你理解内核编程的边界，而不是只会写应用层代码。</p>`,
-        core: `<p>Linux 把虚拟地址空间分两部分：32 位 ARM 上通常用户 3GB、内核 1GB，64 位是各自独立的大空间。目的是保护：用户程序只能访问自己的地址空间，不能直接读写内核数据或硬件寄存器，一个进程崩溃也不会拖垮系统。CPU 通过特权级实现（ARM 的 EL0/EL1），用户态执行特权指令或访问内核地址会触发异常。</p><p>调用 <code>read()</code> 时，C 库把系统调用号放进寄存器，执行 <code>SVC</code>（或 <code>syscall</code>）触发异常，CPU 切到内核态、跳到系统调用入口，按调用号查表找到 <code>sys_read</code>，再由 VFS 调到具体驱动的 read。</p><p>驱动里不能直接 <code>memcpy</code> 用户指针，因为用户给的地址可能非法、没映射、甚至是内核地址（恶意程序），必须用 <code>copy_to_user/copy_from_user</code>，它们会做地址合法性检查，失败返回未拷贝的字节数。</p>`,
+        core: `<p>Linux 把地址空间分为用户和内核两部分，CPU 靠 EL0/EL1 特权级隔离；read 通过 SVC 进内核，驱动必须用 copy_to_user/copy_from_user 访问用户指针。</p>`,
         answer: `<p>Linux 把虚拟地址空间分成两部分：32 位 ARM 上通常是用户空间 3GB（0x00000000~0xBFFFFFFF）、内核空间 1GB（0xC0000000 以上）；64 位则是各自独立的巨大空间。</p>
 <p>分开的目的是<strong>保护</strong>：用户程序只能访问自己的地址空间，不能直接读写内核数据或硬件寄存器；一个进程崩溃也不会拖垮整个系统。CPU 通过特权级（ARM 的 EL0/EL1）实现：用户态是非特权级，执行特权指令或访问内核地址会触发异常。</p>
 <p>用户程序调用 <code>read()</code> 时，C 库把系统调用号放进寄存器，执行 <code>SVC</code>（或 <code>syscall</code>）指令触发异常，CPU 切换到内核态，跳转到系统调用入口，根据调用号查表找到 <code>sys_read</code>，再由 VFS 调用到具体驱动的 <code>read</code> 函数。</p>
@@ -133,7 +133,7 @@ static const struct file_operations demo_fops = {
         point: "资源隔离与共享、上下文切换开销，以及 IPC 的适用场景。",
         q: `<p>面试官：<strong>进程和线程</strong>有什么区别？Linux 里创建线程用哪个系统调用？进程间通信有哪些方式，各自适合什么场景？</p>`,
         exam: `<p>考察操作系统基础。能说清“进程有独立地址空间，线程共享地址空间”“线程切换开销小但需要自己同步”“Linux 用 clone 实现，线程本质是共享资源的进程”，说明理解得比较深。</p>`,
-        core: `<p>进程是资源分配的基本单位，有独立虚拟地址空间、文件描述符表、信号处理等；线程是调度的基本单位，同一进程内的线程共享地址空间和文件描述符，但各有独立栈和寄存器。</p><p>因为共享地址空间，线程间通信只需读写同一块内存、速度快，但必须自己做同步（互斥锁、条件变量），否则有竞态；进程隔离好、一个崩溃不影响另一个，但通信要内核介入、开销大。Linux 没有单独的“创建线程”系统调用，<code>pthread_create</code> 底层是 <code>clone()</code>，通过参数决定共享哪些资源，所以 Linux 线程本质是“共享资源的进程”。</p><p>IPC 主要有：管道（父子进程、单向）、消息队列（带边界、可多对多）、共享内存（最快、需自己同步）、信号量（同步）、信号（异步通知）、Socket（可跨主机）。</p>`,
+        core: `<p>进程是资源分配单位、有独立地址空间，线程是调度单位、共享地址空间；Linux 线程本质是 clone 出来的共享资源的进程。</p>`,
         answer: `<p>进程是资源分配的基本单位，有独立的虚拟地址空间、文件描述符表、信号处理等；线程是调度的基本单位，同一进程内的线程共享地址空间和文件描述符，但各有独立的栈和寄存器。</p>
 <p>因为共享地址空间，线程间通信只需读写同一块内存，速度快，但必须自己做同步（互斥锁、条件变量），否则会有竞态。进程间隔离好，一个崩溃不影响另一个，但通信需要内核介入，开销大。</p>
 <p>Linux 没有单独的“创建线程”系统调用，<code>pthread_create</code> 底层是 <code>clone()</code>，通过参数决定共享哪些资源（地址空间、文件描述符、信号处理等）。所以 Linux 的线程本质上是“共享资源的进程”。</p>
@@ -241,7 +241,7 @@ shared_t *shm_create(void)
         point: "设备号、file_operations、cdev 注册、open/read/write 的实现与用户态交互。",
         q: `<p>面试官：写一个<strong>字符设备驱动</strong>需要哪几步？<code>file_operations</code> 里的函数什么时候被调用？设备节点是怎么创建的？</p>`,
         exam: `<p>考察 Linux 驱动的基本功。能说清“申请设备号 → 初始化 cdev → 注册 → 创建类/设备节点”“用户 open 对应驱动的 open”“主次设备号的作用”，说明你写过实际驱动。</p>`,
-        core: `<p>步骤：申请设备号（<code>alloc_chrdev_region</code> 动态或 <code>register_chrdev_region</code> 静态）；初始化并注册 <code>cdev</code>、绑定 <code>file_operations</code>；创建设备类和节点（<code>class_create</code> + <code>device_create</code>），让 udev/mdev 自动在 <code>/dev</code> 下生成节点；模块退出时反向释放。</p><p>用户 open <code>/dev/xxx</code> 时，VFS 按设备节点的主设备号找到 cdev，调用驱动的 open；read/write 对应 read/write；close 对应 release。</p><p>主设备号标识驱动，次设备号标识同一驱动下的不同设备实例，比如两个串口可共用一个主设备号、用次设备号区分。</p>`,
+        core: `<p>字符设备驱动要申请设备号、注册 cdev 和 file_operations、创建设备节点；主设备号标识驱动、次设备号标识同一驱动下的实例。</p>`,
         answer: `<p>基本步骤是：申请设备号（<code>alloc_chrdev_region</code> 动态或 <code>register_chrdev_region</code> 静态）；初始化并注册 <code>cdev</code>，绑定 <code>file_operations</code>；创建设备类和设备节点（<code>class_create</code> + <code>device_create</code>），这样 udev/mdev 会自动在 <code>/dev</code> 下生成节点；最后在模块退出时反向释放。</p>
 <p>用户态 <code>open("/dev/xxx")</code> 时，VFS 根据设备节点的主设备号找到对应的 cdev，调用驱动的 <code>open</code>；<code>read</code>/<code>write</code> 分别对应 <code>read</code>/<code>write</code>；<code>close</code> 对应 <code>release</code>。</p>
 <p>主设备号标识驱动，次设备号标识同一驱动下的不同设备实例。比如两个串口可以共用一个主设备号，用次设备号区分。</p>`,
@@ -400,7 +400,7 @@ MODULE_LICENSE("GPL");`
         point: "硬件描述与代码分离、compatible 匹配、资源获取 API。",
         q: `<p>面试官：为什么要有<strong>设备树</strong>？它解决了什么问题？驱动怎么从设备树里拿到寄存器地址和中断号？</p>`,
         exam: `<p>考察对 Linux 驱动模型的现代理解。能说清“以前板级文件把硬件信息写死在 C 代码里，换板子要改内核”“设备树用数据描述硬件，驱动通过 compatible 匹配”，说明你跟上主流做法。</p>`,
-        core: `<p>设备树之前 ARM Linux 用板级文件描述硬件：哪个 I2C 挂了什么、寄存器地址、用哪个中断，全写在 C 代码里，换板子就要改内核重编译，内核里堆了大量板级代码。设备树把硬件描述抽成独立文本 <code>.dts</code>，编译成 <code>.dtb</code> 由 bootloader 传给内核；内核解析后创建对应 device，再和 driver 匹配，同一份内核可支持多块板子，只换 dtb。</p><p>匹配靠 <code>compatible</code>：节点写 <code>compatible = "vendor,device"</code>，驱动的 <code>of_match_table</code> 列出支持的字符串，一致就调 probe。probe 里用 <code>of_iomap</code> 或 <code>platform_get_resource</code> 拿寄存器、<code>platform_get_irq</code> 拿中断、<code>of_property_read_u32</code> 读自定义属性。</p><p>要区分挂载位置：节点直接挂在 SoC 下、用 reg 描述寄存器窗口，是 platform 设备走 <code>platform_driver</code>；挂在 <code>&amp;i2c1</code> 这类总线节点下、reg 是从机地址，内核生成 <code>i2c_client</code>，驱动必须写成 <code>i2c_driver</code>，用 <code>i2c_transfer</code>/regmap 访问、中断取 <code>client-&gt;irq</code>。</p>`,
+        core: `<p>设备树把板级硬件描述从内核代码里抽出来，编译成 dtb 由 bootloader 传给内核；驱动靠 compatible 匹配，挂 I2C 下就用 i2c_driver。</p>`,
         answer: `<p>在设备树之前，ARM Linux 用“板级文件”（board file）描述硬件：哪个 I2C 上挂了什么设备、寄存器地址是多少、用哪个中断，全部写在 C 代码里。每换一块板子就要改内核、重新编译，内核里堆积了大量板级代码。</p>
 <p>设备树把硬件描述抽成独立的文本文件（.dts），编译成二进制（.dtb）后由 bootloader 传给内核。内核启动时解析设备树，创建对应的 device，再和 driver 匹配。这样同一份内核可以支持多块板子，只换 dtb 即可。</p>
 <p>匹配靠 <code>compatible</code> 属性：设备树节点里写 <code>compatible = "vendor,device"</code>，驱动的 <code>of_match_table</code> 里列出支持的字符串，两者一致就调用 probe。</p>
@@ -516,7 +516,7 @@ MODULE_LICENSE("GPL");`
         point: "交叉工具链、sysroot、构建系统的分层组织与增量编译。",
         q: `<p>面试官：什么是<strong>交叉编译</strong>？为什么嵌入式 Linux 要交叉编译？一个多目录的 C 工程，Makefile 应该怎么组织？CMake 又解决了什么问题？</p>`,
         exam: `<p>考察工程构建能力。能说清“在 x86 上编译 ARM 程序，需要交叉工具链和 sysroot”“Makefile 用变量和模式规则复用”“CMake 生成构建文件，跨平台更好管理依赖”，说明你能独立搭建工程。</p>`,
-        core: `<p>交叉编译是在一种平台生成另一种平台的可执行文件，比如 x86 PC 上用 <code>arm-linux-gnueabihf-gcc</code> 编出 ARM 板子上跑的程序，原因是目标板资源有限跑不动编译器和工具链。需要三样：交叉工具链（编译器、链接器、binutils）、目标平台的库和头文件（sysroot）、正确的编译选项（<code>--sysroot</code>、<code>-march</code>、<code>-mfpu</code>）。</p><p>Makefile 组织：顶层定义工具链前缀、编译选项、目标，用 SUBDIRS 递归进子目录；子目录只管自己的源文件和依赖；公共规则放 <code>.mk</code> 里 include；用模式规则 <code>%.o: %.c</code> 避免重复写命令，用 <code>-MMD -MP</code> 自动生成头文件依赖。</p><p>CMake 解决手写 Makefile 难维护、跨平台麻烦的问题：用 <code>CMakeLists.txt</code> 描述目标、源文件、依赖和安装规则，生成 Makefile 或 Ninja；自带工具链文件机制，交叉编译只需指定 <code>toolchain.cmake</code>。</p>`,
+        core: `<p>交叉编译是在 x86 上生成 ARM 可执行文件，需要交叉工具链、目标 sysroot 和正确的 -march/-mfpu；Makefile 用模式规则和 -MMD，CMake 用 toolchain 文件。</p>`,
         answer: `<p>交叉编译是在一种平台上生成另一种平台的可执行文件。比如在 x86 的 PC 上用 <code>arm-linux-gnueabihf-gcc</code> 编译出能在 ARM 板子上运行的程序。原因是目标板资源有限，跑不动编译器和整个工具链。</p>
 <p>交叉编译需要三样东西：交叉工具链（编译器、链接器、binutils）、目标平台的库和头文件（sysroot）、以及正确的编译选项（<code>--sysroot</code>、<code>-march</code>、<code>-mfpu</code>）。</p>
 <p>Makefile 的组织方式是：顶层 Makefile 定义工具链前缀、编译选项、目标，用 <code>SUBDIRS</code> 递归进入子目录；子目录 Makefile 只关心自己的源文件和依赖；公共规则放在 <code>.mk</code> 文件里 include。用模式规则 <code>%.o: %.c</code> 避免重复写编译命令，用 <code>-MMD -MP</code> 自动生成头文件依赖。</p>
@@ -628,7 +628,7 @@ set(CMAKE_C_FLAGS "\${CMAKE_C_FLAGS} -Os -Wall -Wextra")`
         point: "BootROM → SPL → U-Boot → 内核 → 根文件系统 → init 的完整链路。",
         q: `<p>面试官：一块 ARM Linux 板子<strong>上电后</strong>，到应用程序跑起来，中间经历了哪些阶段？U-Boot 做了什么事？根文件系统是必须的吗？</p>`,
         exam: `<p>考察对整个系统启动链路的理解。能说清“BootROM 加载 SPL，SPL 初始化 DDR 后加载 U-Boot，U-Boot 加载内核和 dtb，内核挂载根文件系统并启动 init”，说明你做过系统集成。</p>`,
-        core: `<p>典型链路：BootROM 是芯片内固化代码，按启动引脚（SD 卡、eMMC、SPI Flash）加载第一级引导，只认有限格式且容量很小；SPL 因为 ROM 加载不了完整 U-Boot（DDR 还没初始化），先加载精简 SPL，它初始化 DDR、时钟、串口，再把完整 U-Boot 搬进 DDR；U-Boot 初始化更多外设（网口、存储、显示），提供命令行，把内核镜像和 dtb 加载到内存、设置 bootargs 后跳转；内核解压、初始化内存管理、调度、驱动，解析设备树、挂载根文件系统，最后启动第一个用户态进程 init（systemd 或 busybox init）；init 按配置起服务，最终运行应用。根文件系统是必须的，否则内核找不到 init 会 panic。</p>`,
+        core: `<p>启动链是 BootROM→SPL→U-Boot→内核→init；SPL 先初始化 DDR 再把完整 U-Boot 搬进内存，内核最后挂根文件系统并启动 init。</p>`,
         answer: `<p>典型链路是：</p>
 <p><strong>BootROM</strong>：芯片内部的固化代码，根据启动引脚（SD 卡、eMMC、SPI Flash）加载第一级引导程序。它只认识有限的格式，且容量很小。</p>
 <p><strong>SPL</strong>（二级程序加载器）：因为 BootROM 加载不了完整 U-Boot（DDR 还没初始化），先加载一个精简版 SPL，它初始化 DDR、时钟、串口，然后把完整 U-Boot 搬到 DDR 运行。</p>
@@ -739,7 +739,7 @@ bootz 0x80800000 - 0x83000000`
         point: "模块入口/出口、MODULE_LICENSE、加载依赖；modprobe 会处理依赖和配置文件。",
         q: `<p>面试官：写一个最简单的内核模块，需要哪些要素？为什么必须声明许可证？</p>`,
         exam: `<p>考察驱动开发基础。能写出 init/exit、知道 insmod 与 modprobe 的差异、理解内核与用户空间的区别，就很好。</p>`,
-        core: `<p>最小模块：包含 <code>linux/module.h</code> 和 <code>linux/kernel.h</code>；初始化函数 <code>static int __init xxx_init(void)</code> 返回 0 表示成功；退出函数 <code>static void __exit xxx_exit(void)</code>；<code>module_init/module_exit</code>；<code>MODULE_LICENSE("GPL")</code>，否则内核标记为污染（tainted），部分 API 不可用。</p><p><code>insmod</code> 直接加载指定 .ko、不处理依赖、参数手动传；<code>modprobe</code> 从 <code>/lib/modules/$(uname -r)/</code> 查找、自动加载依赖、读 <code>modules.dep</code> 和配置。</p><p>和用户程序的区别：跑在内核空间、没有 libc、不能用 printf 要用 printk；不能直接访问用户指针，要用 <code>copy_from_user/copy_to_user</code>；崩溃会导致整个内核 panic，必须小心内存和并发；不支持浮点，保存恢复浮点上下文代价太高。</p>`,
+        core: `<p>内核模块要有 init/exit 函数、module_init/module_exit 和 MODULE_LICENSE("GPL")；它跑在内核空间，不能用 printf、不能直接访问用户指针。</p>`,
         answer: `<p><b>最小模块：</b></p>
 <ul>
 <li><code>#include &lt;linux/module.h&gt;</code> 和 <code>linux/kernel.h</code>；</li>
@@ -825,7 +825,7 @@ MODULE_DESCRIPTION("minimal kernel module");`
         point: "设备树节点与 of_match_table 的 compatible 匹配，匹配成功后调用 probe。",
         q: `<p>面试官：设备树里写了一个节点，驱动怎么知道该由它来处理？probe 函数的调用时机是什么？</p>`,
         exam: `<p>考察 Linux 驱动模型。能说出“compatible 匹配、platform_driver 注册、probe 拿到资源”，就很好。</p>`,
-        core: `<p>匹配：设备树解析后每个节点生成一个 <code>platform_device</code> 带 <code>compatible</code>；驱动注册 <code>platform_driver</code>，<code>of_match_table</code> 列出支持的字符串；总线比较两者，匹配成功调用 probe，probe 里用 <code>platform_get_resource</code>、<code>devm_ioremap_resource</code>、<code>platform_get_irq</code> 拿寄存器、中断、时钟。</p><p>调用时机：设备或驱动任一方注册时总线都会尝试匹配，所以 probe 可能在驱动注册时立即执行，也可能在设备后来出现时执行。probe 里获取资源、初始化硬件、注册字符设备/输入设备/网络设备、申请中断。</p><p>失败时要返回错误码并按相反顺序释放已申请的东西——内核不会因为 probe 失败就调 remove，它只通过 devres 回收 <code>devm_</code> 系列申请的资源，非 devm 的（<code>request_irq</code>、<code>cdev_add</code>）必须手工释放。常见问题：compatible 写错不匹配、资源获取失败没返回错误、多个驱动匹配同一节点。</p>`,
+        core: `<p>platform 驱动靠 compatible 匹配设备树节点，匹配成功调 probe；probe 里取寄存器、中断和时钟，失败要按相反顺序释放非 devm 资源。</p>`,
         answer: `<p><b>匹配过程：</b></p>
 <ol>
 <li>设备树解析后，每个节点生成一个 <code>platform_device</code>，带有 <code>compatible</code> 属性；</li>
@@ -928,7 +928,7 @@ MODULE_LICENSE("GPL");`
         point: "ioctl 用于非数据流的控制操作，命令号用 _IO/_IOR/_IOW 宏编码方向和大小。",
         q: `<p>面试官：字符设备要设置波特率、清空缓冲区，这些操作用 read/write 怎么传？还是用 ioctl？</p>`,
         exam: `<p>考察驱动接口设计。能说出“read/write 传数据流、ioctl 传控制命令”，以及命令号的编码规则，就很好。</p>`,
-        core: `<p>read/write 的语义是数据传输：读设备产生的数据、写数据到设备；控制命令（设参数、启停、清缓冲）不是数据流，混进去会让协议复杂难扩展。ioctl 专门做设备控制：用户调 <code>ioctl(fd, cmd, arg)</code>，驱动在 <code>unlocked_ioctl</code> 里按 cmd 分发。</p><p>命令号用 <code>_IO</code>、<code>_IOR</code>、<code>_IOW</code>、<code>_IOWR</code> 生成，包含方向、类型（magic，通常一个字符避免冲突）、序号、参数大小，内核能检查参数大小减少错误，如 <code>#define MY_SET_BAUD _IOW('M', 1, int)</code>。</p><p>注意：用户指针必须 <code>copy_from_user/copy_to_user</code>；命令号要唯一；不要用 ioctl 传大量数据，大数据走 read/write 或 mmap；复杂参数用结构体并保留版本/大小字段便于扩展。</p>`,
+        core: `<p>read/write 传数据，ioctl 做控制命令；命令号用 _IO/_IOR/_IOW/_IOWR 生成，用户指针必须 copy_from_user，大数据不要走 ioctl。</p>`,
         answer: `<p><b>read/write 的语义是数据传输</b>：读设备产生的数据、写数据到设备。控制命令（设置参数、启动/停止、清空缓冲）不是数据流，混在 read/write 里会让协议复杂、难以扩展。</p>
 <p><b>ioctl</b> 专门用于设备控制：用户态调用 <code>ioctl(fd, cmd, arg)</code>，驱动在 <code>unlocked_ioctl</code> 里根据 cmd 分发。</p>
 <p><b>命令号编码：</b>用 <code>_IO</code>、<code>_IOR</code>、<code>_IOW</code>、<code>_IOWR</code> 宏生成，包含：</p>
@@ -1028,7 +1028,7 @@ static const struct file_operations my_fops = {
         point: "上半部快速响应、下半部处理耗时；tasklet 在软中断上下文、工作队列在进程上下文可睡眠。",
         q: `<p>面试官：中断处理程序里为什么不能做太多事？下半部有哪几种实现？</p>`,
         exam: `<p>考察内核对中断的处理策略。能说出“上半部关中断、下半部可延迟”，以及 tasklet 与工作队列的上下文差异，就很好。</p>`,
-        core: `<p>上半部 hardirq 在中断到来后立即执行，此时本地中断被关闭或部分关闭，必须非常快，只做读状态、清中断、存必要数据、调度下半部；下半部延迟执行耗时处理，此时中断已重新打开。</p><p>softirq 是内核静态定义的软中断，优先级高、跑在中断上下文、不能睡眠，一般由内核子系统使用，驱动很少直接注册；tasklet 基于 softirq、动态注册、软中断上下文、不能睡眠，同一 tasklet 不会并发执行，适合短小延迟处理；工作队列跑在进程上下文、可以睡眠，适合需要 I/O、内存分配、互斥锁的耗时操作；线程化中断把整个处理线程化，上半部只做最小唤醒，其余在线程里执行、可以睡眠，实时性更好，PREEMPT_RT 常用。</p><p>选择：能在上半部快速做完就做完；需要少量延迟且不睡眠用 tasklet；需要睡眠或耗时就工作队列；实时性要求高用线程化中断。</p>`,
+        core: `<p>中断分上半部和下半部：上半部只清中断、存数据，下半部做耗时处理；不能睡眠用 tasklet，要睡眠用工作队列，实时性高用线程化中断。</p>`,
         answer: `<p><b>上半部（hardirq）</b>：中断到来后立即执行，此时本地中断被关闭（或部分关闭），必须非常快。只做：读取状态、清中断、保存必要数据、调度下半部。</p>
 <p><b>下半部</b>：延迟执行耗时处理，此时中断已重新打开，可以处理更多中断。</p>
 <p><b>常见实现：</b></p>
@@ -1125,7 +1125,7 @@ static int __init my_init(void)
         point: "自旋锁忙等、不能睡眠、适合短临界区；信号量可睡眠、适合可能阻塞的场景。",
         q: `<p>面试官：驱动里保护共享数据，什么时候用 spinlock，什么时候用 mutex？中断上下文能用哪个？</p>`,
         exam: `<p>考察内核对并发控制的理解。能说出“中断上下文不能睡眠，所以不能用 mutex”，以及 spin_lock_irqsave 的用途，就很好。</p>`,
-        core: `<p>自旋锁获取不到时忙等、不睡眠，临界区必须很短、不能调可能睡眠的函数，可用于中断上下文；单核上退化为关抢占，但仍要正确使用。信号量/互斥量获取不到时睡眠、让出 CPU，适合临界区较长或可能阻塞的场景，不能用于中断上下文，因为中断里不能睡眠；mutex 有优先级继承，semaphore 没有。</p><p>中断和进程共享数据：进程上下文加锁时要关中断，否则中断处理程序可能在同一 CPU 上打断临界区导致死锁，用 <code>spin_lock_irqsave(&amp;lock, flags)</code> 保存并关本地中断，解锁时恢复。</p><p>原则：临界区短、可能在中断里访问用 spinlock；可能睡眠、临界区长用 mutex；只读共享用 RCU。</p>`,
+        core: `<p>自旋锁忙等、临界区要短、可用于中断；信号量和互斥锁会睡眠、不能用于中断；进程和中断共享数据要用 spin_lock_irqsave 关本地中断。</p>`,
         answer: `<p><b>自旋锁（spinlock）：</b></p>
 <ul>
 <li>获取不到时<b>忙等</b>，不睡眠；</li>
@@ -1210,7 +1210,7 @@ irqreturn_t my_isr(int irq, void *dev)
         point: "sysfs 结构化展示设备/驱动/总线，procfs 偏进程和内核状态；属性用 show/store 实现。",
         q: `<p>面试官：想在 /sys 下暴露一个可读写的驱动参数，怎么实现？为什么不用 procfs？</p>`,
         exam: `<p>考察内核与用户态接口设计。能说出“sysfs 一个属性一个文件、show/store 回调、设备模型绑定”，就很好。</p>`,
-        core: `<p>sysfs 是内核设备模型的结构化视图，按总线/设备/驱动/类组织，每个文件对应一个属性、通常只表达一个值，适合暴露设备配置和状态；procfs 早期用于进程信息，后来被驱动滥用存各种状态，结构松散、不适合结构化设备信息，新驱动优先用 sysfs。</p><p>实现：定义 <code>DEVICE_ATTR_RW(name)</code> 或 <code>DEVICE_ATTR_RO</code> 生成 show/store 回调；show 把值格式化到缓冲（注意 PAGE_SIZE 限制）返回写入长度；store 解析用户输入、范围检查、返回消耗字节数；用 <code>device_create_file</code> 或属性组注册到设备。</p><p>注意：show/store 跑在进程上下文（由读写文件的进程触发），可以睡眠、可以加锁，但不宜长时间阻塞，否则调用它的进程（常是 udev 或启动脚本）会被卡住；写入要严格校验避免非法值弄坏硬件；一个属性一个值，复杂配置用 ioctl 或 configfs。</p>`,
+        core: `<p>sysfs 是内核设备模型的结构化视图，一个文件一个属性；show/store 跑在进程上下文可以睡眠，但要校验输入、注意 PAGE_SIZE 限制。</p>`,
         answer: `<p><b>sysfs</b> 是内核设备模型的结构化视图，按“总线/设备/驱动/类”组织，每个文件对应一个属性，通常一个文件只表达一个值。适合暴露设备配置、状态。</p>
 <p><b>procfs</b> 早期用于进程信息，后来也被驱动滥用存放各种状态；它的结构松散，不适合结构化设备信息。新驱动应优先用 sysfs。</p>
 <p><b>实现方式：</b></p>
@@ -1302,7 +1302,7 @@ ATTRIBUTE_GROUPS(my);
         point: "SPL/TPL 初始化 DRAM，主 U-Boot 加载内核和设备树，bootcmd 决定启动方式。",
         q: `<p>面试官：板子上电后 U-Boot 做了什么？为什么有的平台有 SPL，有的没有？</p>`,
         exam: `<p>考察嵌入式 Linux 启动链。能说出“ROM → SPL → U-Boot → kernel → rootfs”，以及 SPL 的作用，就很好。</p>`,
-        core: `<p>启动链：片内 ROM 按启动引脚从 SD/eMMC/NAND/SPI Flash 读第一阶段引导；SPL 在片内 SRAM 运行，初始化 DRAM、时钟、串口，把主 U-Boot 加载到 DRAM；U-Boot 初始化外设、网络、存储，读环境变量执行 bootcmd，把 kernel image 和 dtb 加载到内存、设 bootargs 后跳转；内核解压、初始化、挂根文件系统、启动 init。</p><p>需要 SPL 是因为片内 SRAM 很小（几十到几百 KB），放不下完整 U-Boot、也无法直接初始化 DRAM，SPL 的任务就是“把 DRAM 初始化好、把大程序搬过去”；有些 SoC 的 ROM 能直接加载完整 U-Boot 就不需要 SPL。环境变量存在 Flash 的 env 分区，bootcmd 是自动启动执行的命令序列，bootargs 传给内核（根文件系统位置、控制台），用 <code>printenv</code>、<code>setenv</code>、<code>saveenv</code> 操作。</p>`,
+        core: `<p>启动链是 ROM→SPL→U-Boot→kernel→rootfs；SPL 存在是因为片内 SRAM 放不下完整 U-Boot，必须先初始化 DRAM；bootargs 由 U-Boot 传给内核。</p>`,
         answer: `<p><b>典型启动链：</b></p>
 <ol>
 <li><b>片内 ROM</b>：根据启动引脚从 SD/eMMC/NAND/SPI Flash 读取第一阶段引导程序；</li>
@@ -1367,7 +1367,7 @@ boot`
         point: "根文件系统包含 init、库、设备节点、配置；BusyBox 提供精简的命令集，init 是第一个进程。",
         q: `<p>面试官：内核启动后为什么要挂载根文件系统？没有它会怎样？</p>`,
         exam: `<p>考察 Linux 系统组成。能说出“init 进程、/dev、/etc、库文件”，以及内核 panic 的原因，就很好。</p>`,
-        core: `<p>根文件系统是内核启动后挂载的第一个文件系统，包含：init 程序（内核最后一步执行 <code>/sbin/init</code> 或 <code>init=</code> 指定的，是用户空间第一个进程 PID 1，负责起服务和管理进程）；基本命令和工具（ls、sh、mount，嵌入式常用 BusyBox 的精简版）；库文件（动态链接需要 libc、libm）；设备节点（<code>/dev</code> 下，现代多用 devtmpfs 自动生成）；<code>/etc</code> 下的配置和启动脚本；<code>/proc</code>、<code>/sys</code>、<code>/tmp</code> 等挂载点。没有根文件系统内核找不到 init 会 panic（No init found 或 Unable to mount root fs）。</p><p>BusyBox 把几百个常用命令编成一个可执行文件，通过符号链接和 <code>argv[0]</code> 判断当前调用哪个命令，极大节省空间，通常也提供 init（<code>/sbin/init</code> 链到 busybox）。</p>`,
+        core: `<p>根文件系统是内核挂载的第一个文件系统，必须有 init 程序，否则内核找不到 init 会 panic；BusyBox 用符号链接和 argv[0] 提供几百个精简命令。</p>`,
         answer: `<p><b>根文件系统（rootfs）</b>是内核启动后挂载的第一个文件系统，包含：</p>
 <ul>
 <li><b>init 程序</b>：内核启动的最后一步是执行 <code>/sbin/init</code>（或通过 <code>init=</code> 指定），它是用户空间的第一个进程（PID 1），负责启动服务、管理进程；</li>
@@ -1428,7 +1428,7 @@ boot`
         point: "Buildroot 简单直接、适合中小项目；Yocto 灵活可扩展、适合复杂产品和长期维护。",
         q: `<p>面试官：要做一套嵌入式 Linux 系统，用 Buildroot 还是 Yocto？</p>`,
         exam: `<p>考察构建系统的实际经验。能说出“学习曲线、可定制性、包管理、维护成本”，就很好。</p>`,
-        core: `<p>Buildroot 基于 Makefile，配置简单、学习曲线平缓，能生成完整 rootfs、工具链、内核、U-Boot；没有包管理器，升级要重新构建镜像；适合中小项目、产品形态固定、团队小。Yocto 基于 BitBake 和 recipe，用 layer 分层组织、定制能力强；支持包管理（rpm/deb/ipk）可增量升级；生态大，芯片厂商和社区有大量 layer；学习曲线陡、构建时间长，适合复杂产品、长期维护、多硬件平台。</p><p>选择：产品单一、快速上市、团队小用 Buildroot；要长期维护、多型号、复杂依赖、增量升级用 Yocto。无论选哪个都要把配置和自定义层纳入版本管理，保证可复现构建。</p>`,
+        core: `<p>Buildroot 用 Makefile、配置简单、适合产品固定的中小项目；Yocto 用 BitBake 和 layer、支持包管理和增量升级，适合复杂长期维护的产品。</p>`,
         answer: `<p><b>Buildroot：</b></p>
 <ul>
 <li>基于 Makefile 的构建系统，配置简单，学习曲线平缓；</li>
@@ -1489,7 +1489,7 @@ boot`
         point: "驱动实现 mmap 回调，用 remap_pfn_range 把物理页映射到用户地址空间。",
         q: `<p>面试官：用户态想直接访问 FPGA 或 LCD 的寄存器，除了 read/write 还有什么办法？mmap 怎么实现？</p>`,
         exam: `<p>考察内存映射机制。能说出“驱动 mmap 回调 + remap_pfn_range、用户得到虚拟地址”，以及 cache 一致性问题，就很好。</p>`,
-        core: `<p>mmap 把设备的一段物理内存映射到用户进程虚拟地址空间，用户态可直接读写，避免每次 read/write 的数据拷贝和系统调用开销，适合帧缓冲、FPGA 寄存器、大块共享缓冲。</p><p>驱动在 <code>file_operations</code> 里实现 mmap 回调，用 <code>remap_pfn_range</code> 把物理页帧号映射到用户 VMA，设置正确的 <code>vm_page_prot</code>（是否可缓存、可写），检查映射长度和偏移防越界。用户 <code>mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, fd, offset)</code> 拿到虚拟地址后像普通内存一样访问。</p><p>注意：设备内存通常要设 non-cached（<code>pgprot_noncached</code>），否则 CPU 缓存会导致读写不生效；映射区域要页对齐；多进程共享用 <code>MAP_SHARED</code>；访问越界可能触发 SIGBUS 或破坏硬件。</p>`,
+        core: `<p>mmap 把设备物理内存映射到用户空间，避免 read/write 拷贝；驱动用 remap_pfn_range 映射，设备内存通常要设 non-cached，长度和偏移要检查。</p>`,
         answer: `<p><b>mmap 的作用：</b>把设备的一段物理内存映射到用户进程的虚拟地址空间，用户态可以直接读写，避免每次 read/write 的数据拷贝和系统调用开销。适合帧缓冲、FPGA 寄存器、大块共享缓冲区。</p>
 <p><b>驱动实现：</b></p>
 <ul>

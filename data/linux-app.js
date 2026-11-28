@@ -60,7 +60,7 @@
         point: "考察 socket/bind/listen/accept/read/write/close 的调用顺序、backlog 与 SO_REUSEADDR，以及非阻塞下的 EAGAIN 和半包处理。",
         q: `<p>面试官：写一个 TCP server，<strong>从创建到收发数据的完整调用顺序是什么？</strong>阻塞和非阻塞的区别在哪？<strong>非阻塞下 read 返回 0 和 -1 分别代表什么？</strong></p>`,
         exam: `<p>这题是 Linux 应用岗的入门必问。能说清 listen 的 backlog、accept 返回新 fd、非阻塞要处理 EAGAIN 和半包，说明你写过真实的服务端，而不是只跑过 demo。</p>`,
-        core: `<p>流程：<code>socket(AF_INET, SOCK_STREAM, 0)</code> 创建监听套接字；<code>setsockopt(SO_REUSEADDR)</code> 避免重启时 Address already in use；<code>bind()</code> 绑地址端口；<code>listen(fd, backlog)</code> 把主动套接字变被动、内核开始维护连接队列；<code>accept()</code> 取出一个已完成连接的新 fd，监听 fd 继续 accept；在新 fd 上 read/write；对端关闭或出错时 close 新 fd，监听 fd 最后再关。</p><p>阻塞模式下 accept 没新连接就睡、read 没数据就睡，一个线程只能服务一个连接；非阻塞（<code>fcntl(O_NONBLOCK)</code>）没数据立刻返回 -1 并置 <code>errno=EAGAIN/EWOULDBLOCK</code>，程序继续做别的事、等下次可读再读。</p><p>read 返回：&gt;0 是读到的字节数，可能小于请求长度（半包），要循环读；0 是对端有序关闭（发了 FIN），读完剩余数据后 close；-1 出错，非阻塞下 EAGAIN 表示“现在没数据、等会儿再来”、EINTR 表示被信号打断可重试、其他错误要关连接。写也不能假设一次写完，write 返回实际写入字节数，可能小于请求值（发送缓冲满），要循环写剩余；还要忽略 SIGPIPE，否则对端关闭后写入会让进程直接退出。</p>`,
+        core: `<p>TCP 服务端 socket→bind→listen→accept→read/write；accept 返回新 fd，read 返回 0 是对端关闭，非阻塞下 EAGAIN 表示暂时没数据。</p>`,
         answer: `<p><b>完整流程：</b></p>
 <ol>
 <li><code>socket(AF_INET, SOCK_STREAM, 0)</code> 创建监听套接字；</li>
@@ -210,7 +210,7 @@ int main(void)
         point: "考察三者的数据结构、复杂度、fd 数量限制、触发模式，以及 epoll 在内核中的就绪队列机制。",
         q: `<p>面试官：<strong>select、poll、epoll 有什么区别？</strong>epoll 为什么高效？<strong>水平触发和边缘触发怎么选？</strong></p>`,
         exam: `<p>这题几乎必问。能说出 select 的 1024 限制和 O(n) 扫描、epoll 的就绪链表和回调机制、ET 必须读到 EAGAIN，就说明你理解的是机制而不是背结论。</p>`,
-        core: `<p>select 用 fd_set 位图表示关心的 fd，每次调用把整个集合从用户态拷到内核、内核对所有 fd 线性扫描，返回后再扫一遍找就绪的；fd 数受 <code>FD_SETSIZE</code> 限制（通常 1024），每次调用都要重设集合。poll 用 pollfd 数组代替位图、没有 1024 限制，但仍是“整组拷贝 + 线性扫描”，fd 多了照样慢。</p><p>epoll 把“注册”和“等待”分开：<code>epoll_ctl</code> 把 fd 注册进内核红黑树、只拷贝一次；内核在每个 fd 的就绪回调里把它挂到就绪链表；<code>epoll_wait</code> 只返回就绪链表里的 fd，复杂度与“就绪数量”相关而不是“注册总数”，所以上万连接、少量活跃时优势明显。</p><p>触发模式：水平触发 LT 默认，只要缓冲还有数据每次 epoll_wait 都通知，写起来简单不易漏读；边缘触发 ET 只在状态变化时通知一次，必须循环读到 EAGAIN，否则剩余数据不再触发、连接就“卡住”，ET 减少系统调用但代码更容易写错。选择：连接少、逻辑简单用 select/poll；高并发用 epoll；追求性能且能保证“读干净”用 ET，否则 LT 更稳。epoll 不能用于普通文件（总是就绪），也不适合 fd 频繁增删。</p>`,
+        core: `<p>select 用位图、有 1024 限制，poll 用数组但仍线性扫描；epoll 把注册和等待分开、只返回就绪 fd，适合高并发；ET 要读到 EAGAIN，LT 更稳。</p>`,
         answer: `<p><b>select：</b>用 <code>fd_set</code> 位图表示关心的 fd，每次调用把整个集合<b>从用户态拷贝到内核</b>，内核对所有 fd 做线性扫描，返回后再扫描一遍找哪个就绪。fd 数量受 <code>FD_SETSIZE</code> 限制（通常 1024），且每次调用都要重新设置集合。</p>
 <p><b>poll：</b>用 <code>pollfd</code> 数组代替位图，没有 1024 限制，但仍然是“整组拷贝 + 线性扫描”，fd 多了性能照样下降。</p>
 <p><b>epoll：</b>把“注册”和“等待”分开。<code>epoll_ctl</code> 把 fd 注册进内核的红黑树，只拷贝一次；内核在每个 fd 的就绪回调里把它挂到<b>就绪链表</b>；<code>epoll_wait</code> 只返回就绪链表里的 fd，复杂度与“就绪数量”相关，而不是“注册总数”。所以上万连接、少量活跃时优势明显。</p>
@@ -325,7 +325,7 @@ int select_loop(int listen_fd, int *clients, int max_clients)
         point: "考察线程创建/回收、互斥锁保护共享数据、条件变量的谓词循环与丢失唤醒，以及 signal/broadcast 的区别。",
         q: `<p>面试官：用 pthread 写一个生产者—消费者。<strong>互斥锁和条件变量分别解决什么问题？</strong>为什么 <code>pthread_cond_wait</code> 要放在 <code>while</code> 里？</p>`,
         exam: `<p>这题考的是并发基本功。能说清“互斥锁保护数据、条件变量负责等待/通知、wait 会原子释放锁并在返回时重新加锁”，以及“while 防虚假唤醒”，就说明你写过正确的并发代码。</p>`,
-        core: `<p>互斥锁解决“多个线程同时改同一份数据”的竞态；条件变量解决“没数据时不要空转、等有数据再干活”的等待通知。标准用法：加锁 → <code>while (count == 0) pthread_cond_wait(&amp;not_empty, &amp;mutex);</code> → 取数据改计数 → <code>pthread_cond_signal(&amp;not_full)</code> → 解锁。</p><p>wait 为什么放 while 里：一是虚假唤醒，条件变量可能在没有 signal 的情况下返回；二是被唤醒后条件可能又被别的线程改掉（多个消费者竞争一个数据），所以醒来必须重新检查谓词，不满足继续等。</p><p>wait 内部原子地做三件事——释放互斥锁、把线程挂到条件变量等待队列、睡眠，被唤醒时重新获取锁再返回；这个“释放锁 + 睡眠”必须原子，否则会在“检查条件”和“进入等待”之间丢通知。signal 只唤醒一个等待者，适合每次只产生一个资源；broadcast 唤醒全部，适合状态变化影响所有线程（如退出标志）。用错会丢唤醒或惊群。</p>`,
+        core: `<p>互斥锁保护共享数据，条件变量解决等待通知；wait 必须放在 while 里重新检查条件，因为它有虚假唤醒，signal 唤醒一个、broadcast 唤醒全部。</p>`,
         answer: `<p><b>互斥锁</b>解决“多个线程同时改同一份数据”的竞态；<b>条件变量</b>解决“没数据时不要空转，等有数据再干活”的等待/通知。</p>
 <p><b>标准用法：</b></p>
 <ol>
@@ -431,7 +431,7 @@ int get(void)
         point: "考察 fork 的返回值与写时复制、僵尸/孤儿进程、daemon 的双 fork 步骤，以及 async-signal-safe 约束。",
         q: `<p>面试官：<strong>fork 之后父子进程发生了什么？</strong>守护进程怎么创建？<strong>信号处理函数里为什么不能随便调 printf？</strong></p>`,
         exam: `<p>这题覆盖进程模型的三块：fork 的语义、daemon 的标准步骤、信号的异步安全。能说出“双 fork + setsid + 重定向 fd”和“信号处理里只能调 async-signal-safe 函数”，就很完整。</p>`,
-        core: `<p>fork 调用一次返回两次：父进程得子 PID（&gt;0），子进程得 0，失败 -1。子进程是地址空间副本，但 Linux 用写时复制（COW），只读页共享、写时才复制，所以 fork 很快、内存不会立刻翻倍。子进程继承 fd、信号处理、环境变量，但不继承线程（多线程 fork 后只有调用线程活着）、锁状态和定时器。</p><p>子进程先退、父进程没 wait 会变僵尸（Z）占 PID；父进程先退则子进程被 init/systemd 收养。父进程必须 waitpid 或处理 SIGCHLD。守护进程：fork 后父退出 → <code>setsid()</code> 脱离控制终端 → 再 fork 一次确保不是会话首进程 → <code>chdir("/")</code> → <code>umask(0)</code> → stdin/stdout/stderr 重定向 <code>/dev/null</code>。</p><p>信号处理函数里只能调 async-signal-safe 的函数（write、_exit、signal），printf/malloc 可能死锁；推荐只置 <code>volatile sig_atomic_t</code> 标志或写 pipe/eventfd，主循环再处理（self-pipe trick）。</p>`,
+        core: `<p>fork 返回两次，父进程得子 PID、子进程得 0，子进程用写时复制共享内存；子进程退出父进程要 wait，守护进程要 fork、setsid、再 fork、重定向标准 IO。</p>`,
         answer: `<p><b>fork 的语义：</b>调用一次，返回两次。父进程拿到子进程 PID（<code>&gt;0</code>），子进程拿到 <code>0</code>，失败返回 <code>-1</code>。子进程获得父进程地址空间的<b>副本</b>，但 Linux 用写时复制（COW）：只读共享物理页，任一进程写入时才复制，所以 fork 很快、内存也不会立刻翻倍。</p>
 <p>子进程继承父进程的 fd、信号处理方式、环境变量；但<b>不继承</b>父进程的线程（多线程程序 fork 后只有调用线程存活）、锁状态、定时器。</p>
 <p><b>僵尸与孤儿：</b>子进程先退出、父进程没 <code>wait</code>，子进程变成僵尸（Z），占着 PID 和退出状态；父进程先退出，子进程被 init/systemd 收养，成为孤儿。所以父进程必须 <code>waitpid</code>，或者用 <code>SIGCHLD</code> 处理。</p>
@@ -561,7 +561,7 @@ int main(void)
         point: "考察常用诊断命令的关键字段、常见异常指标，以及“先看什么、再看什么”的排查顺序。",
         q: `<p>面试官：线上设备变卡，你登上机器，<strong>会依次看哪些命令？</strong>每个命令重点看什么？<strong>怎么判断是内存、磁盘还是网络的问题？</strong></p>`,
         exam: `<p>这题考的是实战手感。能说出 <code>free</code> 要看 available 而不是 free、<code>df -i</code> 看 inode、<code>top</code> 看 load 和 %CPU、<code>ss</code> 看 TIME_WAIT，就说明你真的排查过线上问题。</p>`,
-        core: `<p>按“整体 → 内存 → 磁盘 → 进程 → 网络”看：① top/uptime 先看 load average 和 CPU 分布，us 高是用户态忙、sy 高是系统调用多、wa 高是等 I/O、si/hi 是软硬中断；load 高但 CPU 不高通常是大量进程在等 I/O 或 D 状态。② <code>free -h</code> 重点看 available 不是 free，Linux 会把空闲内存用作 cache/buffer，free 很小是正常的，available 才是还能给新进程用多少；available 很低且 swap 大量使用才是真紧张。③ <code>df -h</code> 看空间、<code>df -i</code> 看 inode，磁盘满会写失败、inode 满会出现“还有空间但创建不了文件”。④ <code>ps aux</code> 看状态和占用，重点看 STAT：R 运行、S 可中断睡眠、D 不可中断（通常等 I/O、杀不掉）、Z 僵尸，大量 D 说明存储或驱动有问题。⑤ <code>dmesg -T</code> 看内核日志，OOM killer、磁盘 I/O 错误、网卡丢包、USB 断开、驱动报错都在这里，<code>dmesg -w</code> 可实时跟踪。⑥ <code>netstat -tunlp</code>/<code>ss -s</code> 看连接状态和监听端口，大量 TIME_WAIT 是短连接多、大量 CLOSE_WAIT 是应用没 close、Recv-Q/Send-Q 持续不为 0 说明应用处理不过来或网络拥塞。</p>`,
+        core: `<p>排查顺序是负载、内存、磁盘、进程、网络：top 看 load 和 CPU，free 看 available，df/df -i 看空间和 inode，ps 看 D/Z 状态，dmesg 看内核报错。</p>`,
         answer: `<p>我会按“整体 → 内存 → 磁盘 → 进程 → 网络”的顺序看：</p>
 <p><b>1. top / uptime</b>：先看 load average（1/5/15 分钟）和 CPU 使用分布。<code>us</code> 高是用户态忙，<code>sy</code> 高是内核/系统调用多，<code>wa</code> 高是等 I/O，<code>si/hi</code> 是软/硬中断。<code>load</code> 高但 CPU 不高，通常是大量进程在等 I/O 或 D 状态。</p>
 <p><b>2. free -h</b>：重点看 <code>available</code>，不是 <code>free</code>。Linux 会把空闲内存用作 cache/buffer，<code>free</code> 很小是正常的；<code>available</code> 才是“还能给新进程用多少”。如果 available 很低且 swap 大量使用，才是真的内存紧张。</p>
@@ -622,7 +622,7 @@ int main(void)
         point: "考察链接方式、部署依赖、体积与内存占用，以及两种 C 库在特性、许可证、ABI 上的差异。",
         q: `<p>面试官：<strong>静态库和动态库有什么区别？</strong>发布程序时怎么选？<strong>glibc 和 musl 又该怎么选？</strong></p>`,
         exam: `<p>这题考的是“部署现实”：静态链接省依赖但体积大、升级要重编；动态链接省内存但怕库不匹配。能说出 musl 静态友好、glibc 功能全，就说明你做过交叉编译和产品发布。</p>`,
-        core: `<p>静态库 .a 编译时把用到的目标代码复制进可执行文件，优点是无运行时依赖、部署简单、启动略快，缺点是体积大、多个程序重复占内存、库有 bug 要重新链接所有程序；链接顺序有讲究，依赖方写在被依赖方前面，否则符号找不到。动态库 .so 编译时只记录符号引用、运行时由动态链接器加载，优点是多个进程共享同一份代码页、库可独立升级，缺点是部署要带库或保证系统有、版本不匹配报 <code>error while loading shared libraries</code>、启动要做符号重定位。</p><p>选择：嵌入式产品追求“拷过去就能跑”用静态链接；系统里多个程序共用同一库、需要独立升级用动态链接。交叉编译注意 <code>--sysroot</code> 和库路径，别把宿主机的库链进去。</p><p>glibc 功能最全，NSS、locale、iconv、完整 POSIX，兼容性好，但体积大、静态链接可能上 MB、动态依赖多，许可证 LGPL；musl 轻量、代码清晰、静态链接友好（静态 hello world 几十 KB）、MIT 许可，适合嵌入式和容器，但功能有裁剪（NSS 简化、locale 弱）、某些边界行为与 glibc 不同（DNS 解析、malloc 实现、strerror 文案）。不能混用：musl 编的目标文件不能和 glibc 库链接，ABI 不兼容；预编译的第三方 .so 通常针对 glibc，换 musl 要重新编译。</p>`,
+        core: `<p>静态库把代码拷进可执行文件、部署简单但体积大；动态库运行时加载、可共享和独立升级但依赖环境；musl 轻量适合静态链接，glibc 功能全但不能混用。</p>`,
         answer: `<p><b>静态库（.a）：</b>编译时把用到的目标代码<b>复制进可执行文件</b>。优点是没有运行时依赖、部署简单、启动略快；缺点是体积大、多个程序重复占用内存、库有 bug 要重新链接所有程序。链接顺序有讲究：依赖方写在被依赖方前面，否则符号找不到。</p>
 <p><b>动态库（.so）：</b>编译时只记录符号引用，运行时由动态链接器加载。优点是多个进程共享同一份代码页、库可以独立升级；缺点是部署要带库或保证系统有、版本不匹配会报 <code>error while loading shared libraries</code>、启动要做符号重定位。</p>
 <p><b>怎么选：</b>嵌入式产品、追求“拷过去就能跑”，用静态链接；系统里有多个程序共用同一库、需要独立升级，用动态链接。交叉编译时要注意 <code>--sysroot</code> 和库的路径，别把宿主机的库链进去。</p>
@@ -709,7 +709,7 @@ file app_static_musl                       # 应显示 statically linked`
         point: "考察握手/挥手的报文与状态、TIME_WAIT 的两个作用、窗口与拥塞控制的区别，以及常见异常状态。",
         q: `<p>面试官：<strong>为什么握手是三次、挥手是四次？</strong>TIME_WAIT 为什么要等 2MSL？<strong>滑动窗口解决什么问题？</strong></p>`,
         exam: `<p>这题是网络基础的分水岭。能说清“三次是为了双方都确认收发能力”“四次是因为半关闭”“TIME_WAIT 是为了最后一个 ACK 能重传、并让旧报文消散”，就答到本质了。</p>`,
-        core: `<p>三次握手：客户端发 SYN（seq=x）进 SYN_SENT，服务端回 SYN+ACK（seq=y、ack=x+1）进 SYN_RCVD，客户端回 ACK（ack=y+1）双方进 ESTABLISHED。三次的目的是双方都确认自己和对方的收发能力正常并同步初始序号；两次不够，服务端无法确认客户端能收到自己的包；四次多余，第二步的 SYN 和 ACK 可以合并。</p><p>四次挥手：TCP 全双工，两个方向要分别关闭——主动方发 FIN 进 FIN_WAIT_1，被动方回 ACK 进 CLOSE_WAIT、主动方进 FIN_WAIT_2，被动方处理完剩余数据发 FIN 进 LAST_ACK，主动方回 ACK 进 TIME_WAIT 等 2MSL 后关闭。之所以四次，是因为被动方收到 FIN 后可能还有数据要发，ACK 和 FIN 不能合并（半关闭状态）。</p><p>TIME_WAIT 两个作用：主动方最后一个 ACK 可能丢失、被动方会重传 FIN，主动方要还在这个状态才能再回 ACK；让本次连接的旧报文在网络中消散，避免被下一个复用相同四元组的连接误收，2MSL 是“一个来回”的最大生存时间。滑动窗口：接收方通过窗口字段告诉发送方“我还能收多少字节”，发送方据此控制未确认数据量实现流量控制，配合拥塞窗口 cwnd 做拥塞控制；窗口为 0 时发送方停止发送并定期发窗口探测防死锁。</p>`,
+        core: `<p>TCP 三次握手确认双方收发能力并同步序号，四次挥手因为全双工要分别关闭；TIME_WAIT 等 2MSL 是为了重发最后的 ACK 并让旧报文消散。</p>`,
         answer: `<p><b>三次握手：</b></p>
 <ol>
 <li>客户端发 <code>SYN</code>（带初始序号 seq=x），进入 <code>SYN_SENT</code>；</li>
@@ -779,7 +779,7 @@ file app_static_musl                       # 应显示 statically linked`
         point: "考察崩溃现场保存与离线分析、系统调用跟踪、内核 oops 的符号解析，以及“先取证再修”的排查流程。",
         q: `<p>面试官：程序在客户现场崩了，只留下一个 core 文件。<strong>你怎么定位？</strong>如果是内核 oops 呢？<strong>strace 又能帮上什么忙？</strong></p>`,
         exam: `<p>这题考的是“没有现场也能查”。能说清 core 要配合未 strip 的二进制和符号、strace 看系统调用返回值、oops 用 addr2line 解析调用栈，就说明你独立处理过线上崩溃。</p>`,
-        core: `<p>core dump：进程收到 SIGSEGV/SIGABRT 时内核写出地址空间、寄存器、栈，前提 <code>ulimit -c unlimited</code> 且 core pattern 可写；用 <code>gdb ./app core</code>，bt 看调用栈、frame 切帧、<code>info locals</code>/<code>info registers</code>/<code>x/16x $sp</code> 看现场，二进制必须带符号。</p><p>gdb 常用 break、<code>watch var</code>、<code>attach pid</code>、<code>thread apply all bt</code>；strace 跟系统调用，<code>strace -f -tt -T -e trace=openat,read,write ./app</code> 看哪个调用失败、errno 和耗时，程序卡死时 <code>strace -p pid</code> 最有效。</p><p>oops/panic 看 RIP 和 Call Trace，用 <code>addr2line -e vmlinux -f -i</code> 转函数行号。排查先保存现场（core、dmesg、日志）再离线分析，别反复重启冲掉证据；嵌入式可用 pstore/ramoops 把日志存 Flash。</p>`,
+        core: `<p>core dump 用 gdb 看 bt、frame、info locals；strace 看系统调用和 errno；内核 oops 用 addr2line 对照 vmlinux，先保存现场再离线分析。</p>`,
         answer: `<p><b>1. core dump：</b>程序收到 SIGSEGV/SIGABRT 时，内核把进程的地址空间、寄存器、调用栈写成 core 文件。前提是 <code>ulimit -c unlimited</code> 且 core pattern 可写。</p>
 <p>分析：<code>gdb ./app core</code>，先 <code>bt</code> 看调用栈，<code>frame N</code> 切到崩溃帧，<code>info locals</code>、<code>info registers</code>、<code>x/16x $sp</code> 看现场。关键是<b>二进制必须带符号</b>（未 strip，或保留单独的 debug 文件），否则只能看到地址。</p>
 <p><b>2. gdb 常用：</b><code>run</code>、<code>break file:line</code>、<code>watch var</code>（变量被改时停）、<code>attach pid</code>（附加到运行进程）、<code>info threads</code>、<code>thread apply all bt</code>（多线程全栈）。</p>
@@ -865,7 +865,7 @@ dmesg -T | tail -80`
         point: "考察地址转换流程、多级页表、TLB 缓存、缺页的三种类型，以及 COW 与按需分页。",
         q: `<p>面试官：进程访问一个地址，<strong>从虚拟地址到物理地址经历了什么？</strong>页表、TLB、缺页中断分别在哪一步？<strong>fork 之后为什么内存没有立刻翻倍？</strong></p>`,
         exam: `<p>这题考的是内存管理的整条链路。能说清“MMU 查 TLB → 查页表 → 缺页异常 → 内核分配/映射 → 重试指令”，以及 COW 的机制，就说明你理解虚拟内存不是“把硬盘当内存”这么简单。</p>`,
-        core: `<p>地址转换：CPU 发虚拟地址，MMU 先查 TLB（页表缓存），命中就直接得到物理页框号、拼上偏移访问内存；TLB 未命中，MMU 按页表基址逐级查页表（x86-64 4 级 PGD→PUD→PMD→PTE，ARMv7 通常 2 级，ARMv8 4 级），找到页表项；页表项存在但页面不在内存或权限不符，触发缺页异常进内核。</p><p>内核处理：分配物理页、从磁盘/交换区读入、建立映射、更新页表，返回用户态重新执行那条指令。TLB 存最近的“虚拟页→物理页”映射，进程切换要刷新或打标签（ASID/PCID），否则会用到别的进程的映射；修改映射后要做 TLB shootdown 保证其他核看到新值。</p><p>缺页三种：Minor 次缺页，页面已在内存（page cache 或 COW）只是还没建当前进程映射，内核只需改页表、很快；Major 主缺页，页面不在内存要读磁盘/Flash、慢，可能毫秒级；Invalid 非法访问，地址不属于进程合法映射或权限不符，内核发 SIGSEGV、进程崩溃。fork 与 COW：fork 后父子共享同一份物理页、页表都标只读，任一进程写入时触发缺页，内核复制这一页改成可写、各自持有副本，所以 fork 很快、内存只在“写”时才真正复制。</p>`,
+        core: `<p>MMU 先查 TLB，未命中再逐级查页表；缺页分 minor（页在内存只缺映射）、major（要从磁盘读）和非法访问（发 SIGSEGV），fork 的 COW 写时才复制。</p>`,
         answer: `<p><b>地址转换流程：</b></p>
 <ol>
 <li>CPU 发出虚拟地址，MMU 先查 <b>TLB</b>（页表缓存）。命中就直接得到物理页框号，拼接偏移，访问内存。</li>

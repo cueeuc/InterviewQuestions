@@ -29,7 +29,7 @@
         point: "Controller 的 PHY/LL/HCI 与 Host 的 L2CAP/ATT/GATT/SM/GAP，以及一条特征值写入的完整路径。",
         q: `<p>面试官：BLE 协议栈主要由哪些层组成？每层负责什么？手机写一个特征值，数据在协议栈里是怎么一层层走下去的？</p>`,
         exam: `<p>考察是否理解 BLE 的分层，而不是只会调 API。能说清“Controller 管射频和连接，Host 管属性与安全”，就很好。</p>`,
-        core: `<p>分 Controller 和 Host，中间是 HCI。Controller：PHY（2.4G GFSK、1M/2M/Coded）、LL（广播、扫描、连接事件、跳频、CRC、重传、加密起点、40 个信道）、HCI（命令/事件/数据，可走 UART/USB/SDIO 或片内总线）。Host：L2CAP（信道复用、分段重组）、ATT（属性句柄/UUID/值/权限、读写通知、MTU 协商）、GATT（Service/Characteristic/Descriptor 的组织与语义）、SM（配对绑定密钥）、GAP（角色、广播扫描、连接参数）。</p><p>一条“手机写特征值”的路径：App 调 GATT Write → ATT 封装 Write Request → L2CAP 加信道和长度 → HCI ACL → Controller 在下一个连接事件加密、加 CRC、经 PHY 发出；设备 Controller 校验解密后经 HCI 上传 → L2CAP 重组 → ATT 解析 → GATT 找到特征值调应用回调 → Write Response 沿反路径回手机。</p><p>分工：Controller 负责“怎么把包可靠发到对面”，Host 负责“这个包代表哪个属性、有没有权限、要不要加密”。换 Controller 通常只换 HCI 以下，Host 和应用可以复用。</p>`,
+        core: `<p>BLE 分 Controller 和 Host：Controller 管 PHY、链路层、HCI，Host 管 L2CAP、ATT、GATT、SM、GAP；Controller 负责可靠发包，Host 负责属性语义。</p>`,
         answer: `<p>BLE 协议栈分两大块：<b>Controller（控制器）</b>和 <b>Host（主机）</b>，中间是 <b>HCI</b> 接口。</p>
 <p><b>Controller：</b></p>
 <ul>
@@ -149,7 +149,7 @@ void ble_app_init(void)
         point: "GAP 四种角色与链路层主从的区别，GATT client/server 的独立性，以及连接建立后的角色固定。",
         q: `<p>面试官：BLE 里经常说主机、从机、广播者、观察者、发起者，这些角色到底怎么区分？手机连上设备后，谁主谁从？</p>`,
         exam: `<p>考察角色模型是否清晰。能说清“GAP 角色”和“GATT 角色”是两套独立的概念，就不容易在项目里配错。</p>`,
-        core: `<p>GAP 四种角色：Broadcaster 只广播不接受连接（Beacon）；Observer 只扫描不连接（网关收 Beacon）；Peripheral 发可连接广播、接受中心发起的连接，连上后通常是 slave；Central 扫描并发起连接，连上后是 master，负责连接事件时序、信道图和跳频。</p><p>“扫描者/发起者”是链路层的临时状态（scanning/initiating），连上进入 connection 才有 master/slave，BLE 没有经典蓝牙那种 role switch。连接参数由 master 决定，slave 可请求但最终 master 拍板。</p><p>GATT client/server 和 GAP 角色是两套概念：手机典型是 Central + GATT client，设备是 Peripheral + GATT server，但也可以反过来；角色由“谁发起 GATT 操作”决定。一个设备可以同时是 Central 和 Peripheral，也可以同时做 client 和 server。</p>`,
+        core: `<p>GAP 有广播者、观察者、外围、中心四种角色；扫描和发起连接是链路层临时状态，连上后才分主从，GATT client/server 与 GAP 角色是两套概念。</p>`,
         answer: `<p><b>GAP（通用访问规范）定义了四种角色：</b></p>
 <ul>
 <li><b>Broadcaster（广播者）</b>：只发广播，不接受连接，例如 Beacon、iBeacon。</li>
@@ -254,7 +254,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
         point: "UUID 标识服务/特征值/描述符，SIG 16 位别名与自定义 128 位，句柄与 UUID 的区别。",
         q: `<p>面试官：BLE 里的 UUID 是干什么的？为什么有的服务是 0x180F，有的是很长一串？自定义服务该怎么选 UUID？</p>`,
         exam: `<p>考察 GATT 数据模型。能说清“UUID 表意、句柄寻址”“16 位是 SIG 别名、自定义用 128 位”，就很扎实。</p>`,
-        core: `<p>UUID 是属性的“类型标识”，表示这个服务、特征值或描述符是什么，如 <code>0x180F</code> 电池服务、<code>0x2A19</code> 电量、<code>0x2902</code> CCCD。</p><p>16 位是 SIG 分配的短别名，完整形式 <code>0000xxxx-0000-1000-8000-00805F9B34FB</code>，只有 SIG 注册过的才能用，不能自己编一个 <code>0xFF01</code> 当标准；自定义服务和特征值必须用 128 位，可基于 UUID v4 生成。</p><p>UUID 是“是什么”，handle 是“在哪里”（16 位索引，读写实际操作它）。handle 由 server 注册时分配，不同固件版本可能变化，所以 client 必须先做服务发现、按 UUID 找到 handle 并缓存本次连接，不要硬编码。</p>`,
+        core: `<p>UUID 表示属性是什么，16 位是 SIG 注册的短 UUID，自定义必须用 128 位；handle 表示属性在哪里，由服务发现得到，不能硬编码。</p>`,
         answer: `<p><b>UUID 是属性的“类型标识”，用来表示这个服务/特征值/描述符是什么。</b>例如：</p>
 <ul>
 <li>0x1800：Generic Access（GAP 服务）</li>
@@ -362,7 +362,7 @@ void on_service_discovered(uint16_t conn_handle, uint16_t val_handle)
         point: "37/38/39 三个广播信道、31 字节广播数据与 scan response、主动/被动扫描，以及连接请求的建立。",
         q: `<p>面试官：BLE 设备是怎么被手机发现的？广播包里到底能放多少数据？主动扫描和被动扫描有什么区别？</p>`,
         exam: `<p>考察对 BLE 发现流程的理解。能说清“3 个广播信道、31 字节、scan response 再加 31 字节、CONNECT_IND 建连”，就很好。</p>`,
-        core: `<p>Peripheral 在 37/38/39（2402/2426/2480MHz）周期发广播 PDU，每个事件在三个信道各发一次，间隔 20ms~10.24s（单位 0.625ms）。类型有 <code>ADV_IND</code> 可连接可扫描、<code>ADV_NONCONN_IND</code> 只广播（Beacon）、<code>ADV_SCAN_IND</code>、<code>ADV_DIRECT_IND</code>，以及 BLE 5 的 <code>ADV_EXT_IND</code>。</p><p>传统广播的 AdvData 最多 31 字节，扫描响应再加 31，共 62；BLE 5 扩展广播可上千字节，但要手机支持。被动扫描只监听、省电；主动扫描发 <code>SCAN_REQ</code> 拿 <code>SCAN_RSP</code>，多 31 字节但更耗电。扫描占空比 = window/interval，越高发现越快、越耗电。</p><p>Central 扫到目标后发 <code>CONNECT_IND</code>，带接入地址、CRC init、连接间隔、从机延迟、监督超时、信道图、跳频增量和睡眠时钟精度，之后双方跳到数据信道按连接事件通信。三个广播信道分处频段低中高，尽量避开 Wi-Fi 的 1/6/11 主信道，并降低单信道被干扰导致发现失败的概率。</p>`,
+        core: `<p>BLE 外围设备在 37/38/39 三个信道周期广播，间隔 20ms~10.24s，广播数据最多 31 字节、扫描响应再加 31；中心设备扫描后发 CONNECT_IND 建立连接。</p>`,
         answer: `<p><b>广播：</b>Peripheral 在 <b>37、38、39</b> 三个广播信道（2402、2426、2480MHz）上周期性发送广播 PDU。每个广播事件会在三个信道上各发一次（或按配置），间隔称为 <b>Advertising Interval</b>，范围 20ms~10.24s，单位 0.625ms。广播类型主要有：</p>
 <ul>
 <li><b>ADV_IND</b>：可连接、可扫描，最常用。</li>
@@ -473,7 +473,7 @@ void ble_start_adv(void)
         point: "平均电流 = 睡眠 + 射频占空比；广播/连接间隔、slave latency、MTU/DLE、通知方式与电池寿命估算。",
         q: `<p>面试官：BLE 设备怎么做到一颗纽扣电池用一年？广播间隔、连接间隔、slave latency 你一般怎么设？</p>`,
         exam: `<p>考察是否算过功耗账。能说清“占空比决定平均电流”“连接间隔和延迟的权衡”“大 MTU 减少包数”，就很好。</p>`,
-        core: `<p>先算账：平均电流 ≈ 睡眠电流 + 射频事件电流 × 占空比 + MCU 唤醒处理电流；省电的核心不是把睡眠电流做到最低，而是减少射频开启的次数和时长。</p><p>广播间隔 20ms~10.24s：配网或首次连接 100ms 左右，长期 Beacon/传感器 500ms~1s，电池设备不要长期 20ms。连接间隔 7.5ms~4s：HID/实时控制 15~30ms，传感器周期上报 100~500ms，超低频 1~4s。从机延迟最多 499，interval 100ms + latency 4 可 500ms 醒一次；监督超时必须大于 (1+latency)×2×interval。</p><p>其他：MTU 协商到 247、DLE 开到 251，减少包数和事件；实时数据用 Notify 不用 Indicate；2M PHY 空口时间减半；多次测量打包一次上报；传感器不用时断电；MCU 在间隔之间进低功耗。寿命估算：CR2032 约 220mAh，10µA 约 2.5 年，100µA 约 3 个月，还要扣自放电和峰值电流影响。</p>`,
+        core: `<p>BLE 省电靠拉长广播和连接间隔、利用从机延迟、减少每次事件的数据量；CR2032 约 220mAh，10µA 约 2.5 年、100µA 约 3 个月。</p>`,
         answer: `<p><b>先算账：</b>BLE 的平均电流 ≈ 睡眠电流 + 每次射频事件的电流 × 占空比 + MCU 唤醒/处理电流。省电的核心不是“把睡眠电流做到最低”，而是<b>减少射频开启的次数和时长</b>。</p>
 <p><b>广播间隔：</b>范围 20ms~10.24s。间隔越短，被发现越快，但每次三个信道都要发，功耗越高。</p>
 <ul>
@@ -579,7 +579,7 @@ void ble_report_batched(const sample_t *s, int n)
         point: "吞吐 = 每连接事件包数 × 每包载荷 / 间隔；MTU、DLE、2M PHY、Notify 与连接参数的组合优化。",
         q: `<p>面试官：你的 BLE 设备传数据很慢，手机端一包只能收 20 字节。怎么把吞吐提上去？延迟又该怎么降？</p>`,
         exam: `<p>考察是否理解 BLE 吞吐的构成。能算清“默认 20 字节 × 每事件 1 包 / 30ms”有多低，并给出 MTU/DLE/PHY/Notify 的组合，就很好。</p>`,
-        core: `<p>默认值有多低：MTU 23、实际载荷 20 字节，连接间隔 30ms、每事件 1 包，吞吐约 <code>20B/30ms ≈ 667B/s ≈ 5.3kbps</code>，这就是“BLE 慢”的来源。</p><p>公式：吞吐 = 每事件包数 × 每包有效载荷 / 连接间隔。四个变量都能动：MTU 从 23 提到 247/517 并开 DLE（PDU 251，单包约 244 字节）；每事件连续多发（很多手机 4~6 包）；间隔缩到 15ms；用 Notify 或 Write Without Response 免逐包 ACK；2M PHY 空口速率翻倍；应用层用二进制协议、合并小包。</p><p>1M PHY、MTU 247、每事件 4 包、15ms，理论约 65KB/s（520kbps），实际受手机、协议栈、干扰影响常见 100~700kbps。延迟 ≈ 间隔×(1+latency)+处理时间，实时控制用 15~30ms、latency=0，别用 Indicate。大文件、固件包有 Wi-Fi 就用 Wi-Fi。</p>`,
+        core: `<p>BLE 默认 MTU 23、有效载荷 20 字节、30ms 间隔，吞吐只有约 667B/s；提高 MTU 和 DLE、每事件多发、缩短间隔、用 Notify 和 2M PHY 可到几十到几百 KB/s。</p>`,
         answer: `<p><b>先算默认值有多低：</b>ATT MTU 默认 23，实际载荷 20 字节；连接间隔 30ms，每个连接事件通常只发 1 包。吞吐 ≈ 20B / 30ms ≈ <b>667 B/s ≈ 5.3 kbps</b>。这就是“BLE 很慢”的来源。</p>
 <p><b>吞吐公式：</b><code>吞吐 = 每个连接事件的包数 × 每包有效载荷 / 连接间隔</code>。四个变量都能优化：</p>
 <ol>
@@ -679,7 +679,7 @@ int ble_send_fast(uint16_t conn_handle, const uint8_t *data, uint16_t len)
         point: "BLE 星型拓扑、Central/Peripheral 多连接能力、协议栈连接数上限，以及连接句柄与上下文管理。",
         q: `<p>面试官：一个 BLE 网关要同时连 10 个传感器，还要被手机连接。硬件和协议栈上要注意什么？BLE 能像 Mesh 一样组网吗？</p>`,
         exam: `<p>考察多连接的实际限制。能说清“星型拓扑、连接数受 RAM/协议栈限制、每条连接独立参数”，并区分 BLE Mesh，就很好。</p>`,
-        core: `<p>BLE 是星型拓扑，不是 Mesh。一个 Central 可以同时连多个 Peripheral；一个 Peripheral 能不能连多个 Central，取决于协议栈和硬件资源。每条连接是独立的点对点链路，有自己的连接句柄、参数、加密状态和 GATT 上下文。</p><p>限制：最大连接数由 Controller 和协议栈决定（ESP32 常见 3~7，Nordic S132 可到 20）；每条连接都要 TX/RX 缓冲、LL 上下文、GATT 状态和密钥，RAM 很紧；所有连接共享一套射频，事件不能重叠，连接越多、间隔越短越难调度。</p><p>实现：建立句柄到设备上下文的映射表，回调按句柄取上下文防串台；扫描用白名单或服务 UUID 过滤；每条连接独立做服务发现、MTU 协商和绑定；限制并发数，超了排队或拒绝；监控 RSSI 和丢包。多连接会显著抬高平均电流，电池设备要谨慎。大规模组网应选 BLE Mesh、Thread 或 Zigbee，而不是硬堆连接。</p>`,
+        core: `<p>BLE 是星型拓扑而非 Mesh，一个中心可连多个外设，连接数受协议栈和 RAM 限制；每条连接独立句柄和状态，多连接会显著增加功耗。</p>`,
         answer: `<p><b>BLE 是星型拓扑，不是 Mesh。</b>一个 Central 可以同时连多个 Peripheral；一个 Peripheral 能不能连多个 Central，取决于协议栈和硬件资源。每个连接都是独立的点对点链路，有自己的连接句柄、参数、加密状态和 GATT 上下文。</p>
 <p><b>谁连谁：</b></p>
 <ul>
@@ -820,7 +820,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
         point: "2.4GHz 的 40 个 2MHz 信道、37 个数据信道与 3 个广播信道，以及跳频/AFH 与 Wi-Fi 共存。",
         q: `<p>面试官：BLE 工作在什么频段？一共有多少通道？为什么广播只用 37、38、39 这三个？</p>`,
         exam: `<p>考察 BLE 射频基础。能说清“40 个 2MHz 信道、3 个广播信道位于频段边缘/中心、AFH 避开干扰”，就很好。</p>`,
-        core: `<p>2.4GHz ISM，2402~2480MHz，信道间隔 2MHz，共 40 个：3 个广播信道 37（2402）、38（2426）、39（2480），37 个数据信道 0~36，连接后在数据信道跳频。</p><p>广播只用 3 个：降低发现成本，扫描者能快速轮询；37 在最低端、39 在最高端、38 在中心，尽量错开 Wi-Fi 的 1/6/11；三个信道分散在频段不同位置，一个被干扰另两个仍可能工作。</p><p>连接跳频按信道图和跳频增量 5~16 跳变，支持 AFH 根据误码把坏信道标为不可用，从而和 Wi-Fi、Zigbee 共存。Wi-Fi 20MHz 信道会覆盖多个 BLE 信道，比如信道 6 覆盖 38 附近和部分数据信道；AFH 能避开数据信道，但广播 37/38/39 改不了，广播阶段仍可能被干扰。BLE 4.x 用 CSA#1 计算下一信道，BLE 5 引入 CSA#2，分布更均匀、抗干扰更好，由双方协商。</p>`,
+        core: `<p>BLE 40 个信道间隔 2MHz，37/38/39 是广播信道（2402/2426/2480），其余 37 个是数据信道；连接后按跳频图跳，AFH 可避开干扰信道。</p>`,
         answer: `<p><b>频段：</b>BLE 工作在 <b>2.4GHz ISM 频段</b>，频率范围 2402~2480MHz。信道间隔 <b>2MHz</b>，共 <b>40 个信道</b>。</p>
 <p><b>通道划分：</b></p>
 <ul>
@@ -911,7 +911,7 @@ void ble_dump_channel_map(uint16_t conn_handle)
         point: "特征值字节流的帧设计、端序/对齐/MTU 分包，以及 CCCD、写类型、UUID、缓存等常见调试坑。",
         q: `<p>面试官：手机和 BLE 设备之间传自定义数据，你会怎么定义格式？调试时遇到“发了但收不到”“收到的是乱码”怎么排查？</p>`,
         exam: `<p>考察实际 BLE 应用开发经验。能说清“特征值只是字节流、要自己定帧”“不要直接发结构体”“MTU 20 字节分包”，就很好。</p>`,
-        core: `<p>GATT 特征值就是一串字节，没有类型、帧头、端序约定，怎么解释完全由应用层决定。推荐帧：版本 1B + 命令 1~2B + 序号 1~2B + 长度 1~2B + 载荷 + CRC16。</p><p>编解码：不要直接 <code>memcpy</code> 结构体（对齐填充、编译器差异、端序都会让手机端对不上），要逐字段序列化并明确字节序；统一大端或明确小端；浮点用 IEEE754 或定点（×100 存 int16）；字符串用 UTF-8 + 长度，不假设 <code>\0</code> 结尾；位标志用掩码并写文档，不要用 C 位域跨平台；按 MTU 分包，默认每包 20 字节，长数据按 offset/序号重组；Notify 断线会丢，关键数据加序号和 ACK 重传。</p><p>常见坑：没开 CCCD（没写 <code>0x2902</code> 永远收不到通知）；Write Request 和 Write Command 用错；UUID/handle 错或硬编码旧固件的 handle；MTU 没协商导致长包被截断；端序和结构体对齐对不上；iOS 缓存旧 GATT 结构，要重启蓝牙或换设备名；连接间隔太长看起来像丢包。工具用 nRF Connect/LightBlue，设备端打印 hex，有条件抓空口或 HCI 日志。</p>`,
+        core: `<p>GATT 特征值只是字节串，应用要自己定义帧头、长度、序号和 CRC，并逐字段序列化、统一端序；注意 CCCD 订阅、MTU 协商和结构体对齐。</p>`,
         answer: `<p><b>先理解：GATT 特征值就是一串字节，没有类型、没有帧头、没有端序约定。</b>协议栈只负责把字节送到对面，怎么解释完全由应用层决定。</p>
 <p><b>推荐的应用层帧：</b>版本（1B）+ 命令（1B/2B）+ 序号（1B/2B）+ 长度（1B/2B）+ 载荷 + CRC16。和串口/网络的帧设计思路一致，只是传输层换成了 GATT。</p>
 <p><b>编解码要点：</b></p>
@@ -1056,7 +1056,7 @@ int ble_send_chunked(uint16_t conn, uint16_t mtu,
         point: "Bootloader + OTA 服务 + 双 Bank/外置 Flash、分片校验、断点续传、签名验签与失败回滚。",
         q: `<p>面试官：你的 BLE 设备怎么做 OTA？升级到一半手机断开或者设备断电，会不会变砖？怎么保证新固件是可信的？</p>`,
         exam: `<p>考察系统设计能力。能说清“bootloader 负责验签和切换”“双 Bank/外置 Flash 保证可回滚”“分片 CRC + 断点续传”，就很好。</p>`,
-        core: `<p>架构是 Bootloader + Application + OTA 服务。典型流程：手机发 START（镜像大小、版本、CRC/SHA256、分片大小）→ 设备检查空间和版本（防降级）、擦除目标区 → 分片传输并回 ACK → 全部收完校验 CRC/SHA256 和签名 → 写“升级标志 + 版本信息”（双份带序号）→ 重启 → Bootloader 验签校验、切换或搬运，失败回滚 → 新固件启动上报版本，手机确认后清标志。</p><p>防变砖：双 Bank A/B，新固件写备用 Bank、旧的不动，校验通过才切换；外置 Flash 方案先存外部再搬运，搬运要可恢复；单 Bank + Bootloader 下载模式最便宜也最危险，必须保证 Bootloader 不被擦除并有恢复通道；升级标志、长度、CRC、版本存两份带序号；记录已写 offset 支持断点续传；擦除搬运大块 Flash 时合理喂狗。</p><p>安全不能只做 CRC，CRC 防不了恶意固件，Bootloader 必须验数字签名（ECDSA/RSA），公钥烧在不可写区，版本单调递增防回滚，必要时加密镜像。BLE 默认 20 字节/包、30ms 间隔传 200KB 很慢，优化 MTU/DLE/2M PHY/Notify 后可到几十 KB/s。</p>`,
+        core: `<p>BLE OTA 是手机发 START、设备擦除并分片接收、校验签名后写升级标志、重启进 Bootloader 切换；A/B 双区和签名校验防变砖。</p>`,
         answer: `<p><b>整体架构：</b>Bootloader + Application + OTA 服务（GATT 特征值）。Bootloader 负责“接收/校验/切换”，Application 负责“传输/进度/重启”。</p>
 <p><b>典型流程：</b></p>
 <ol>

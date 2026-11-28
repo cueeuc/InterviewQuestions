@@ -56,7 +56,7 @@
         q: `<p>面试官：<strong>volatile 关键字有什么作用？</strong>在项目里你会给哪些变量加 volatile？如果我说“加了 volatile 就线程安全了”，这句话对吗？</p>`,
         exam: `<p>这道题表面在问一个关键字，实际在确认三件事：你是否理解<strong>编译器优化</strong>会怎样改变程序语义；你是否清楚 volatile 的<strong>能力边界</strong>（不保证原子性、不保证执行顺序）；你有没有在真实项目里踩过“开了 -O2 程序就卡死”的坑。</p>
 <p>面试官最想听到的不是背定义，而是“为什么需要它”和“它管不了什么”。</p>`,
-        core: `<p><strong>volatile</strong> 告诉编译器：该变量可能在程序控制之外被改变，每次使用都要真实读内存、每次赋值都要真实写回，不能缓存到寄存器，也不能把访问优化掉。</p><p>必加三类：外设寄存器、中断与主循环共享的标志、DMA 直接写入的缓冲区。它<strong>不保证原子性</strong>，<code>g_cnt++</code> 这种读改写仍要关中断、用原子指令或加锁。</p>`,
+        core: `<p>volatile 让编译器每次都真实读写内存、不缓存到寄存器，用于外设寄存器、中断共享标志和 DMA 缓冲；它不保证原子性，读改写仍需关中断或用原子指令。</p>`,
         answer: `<p>volatile 的作用是告诉编译器：<strong>这个变量的值可能在程序控制之外被改变</strong>，因此每次使用都必须真正去内存里读，每次赋值都必须真正写回内存，不能把它缓存到寄存器里，也不能因为“看起来没被修改”就把这段代码优化掉。</p>
 <p>我一般会给三类变量加 volatile：第一类是<strong>外设寄存器</strong>，比如 <code>*(volatile uint32_t *)0x40011004</code>，因为它的值由硬件改变；第二类是<strong>中断服务函数和主循环共享的标志位</strong>，比如串口接收完成标志；第三类是 <strong>DMA 直接写入的缓冲区</strong>，CPU 不能假设那块内存没变。</p>
 <p>但要说清楚：volatile <strong>不保证原子性，也不保证线程安全</strong>。像 <code>g_cnt++</code> 这种读—改—写操作，加了 volatile 依然可能被中断打断而产生竞态，那要靠关中断、原子指令或者互斥锁来解决。</p>`,
@@ -145,7 +145,7 @@ int main(void)
         point: "static 的三种语义：静态存储期、内部链接、以及模块私有化，是模块化设计的基础。",
         q: `<p>面试官：<strong>static 关键字有哪些用途？</strong>分别说说修饰局部变量、全局变量和函数时效果有什么不同。它在嵌入式项目里有什么实际价值？</p>`,
         exam: `<p>考察点在于“链接属性”这个概念。很多人只记得“static 让变量只初始化一次”，却说不清它改变的是<strong>存储期</strong>还是<strong>链接属性</strong>。能讲清楚“为什么驱动模块里的变量都要加 static”，说明你真的写过模块化代码。</p>`,
-        core: `<p>三个位置三种语义：修饰局部变量——存储期从自动变静态，函数返回后值还在、只初始化一次；修饰全局变量和函数——链接属性从外部变内部，只在本 <code>.c</code> 可见，其他文件 <code>extern</code> 也链不到。</p><p>工程价值是模块私有化：驱动内部的状态变量和辅助函数都加 <code>static</code>，对外只暴露 <code>xxx_init</code>、<code>xxx_read</code>。</p>`,
+        core: `<p>static 修饰局部变量时把存储期变为静态、只初始化一次；修饰全局变量或函数时把链接属性改为内部，只在当前 .c 可见。</p>`,
         answer: `<p>static 有三个作用，分别对应三个位置。</p>
 <p>第一，修饰<strong>局部变量</strong>：变量从栈上搬到静态存储区，生命周期变成整个程序运行期，函数退出后值还在，初始化只做一次。常用于保存状态，比如按键扫描的上一次电平。</p>
 <p>第二，修饰<strong>全局变量</strong>：不改变存储位置，但把外部链接改成内部链接，其他 .c 文件即使写了 <code>extern</code> 也链接不到，避免命名冲突。</p>
@@ -254,7 +254,7 @@ p3 = &amp;b;    /* ③ */
 p4 = &amp;b;    /* ⑤ */
 *p4 = 5;    /* ⑥ */</code></pre>`,
         exam: `<p>这是典型的“送分题也是送命题”。判断方法只有一个：<strong>const 修饰的是它左边的东西，如果左边没有东西，就修饰右边</strong>。能一口气说清四种组合，说明指针基础扎实；能补一句“嵌入式里 const 还能把数据放进 Flash”，说明有工程意识。</p>`,
-        core: `<p>口诀：<code>const</code> 在 <code>*</code> 左边修饰指向的内容，在 <code>*</code> 右边修饰指针本身。</p><p><code>const int *p</code> 与 <code>int const *p</code> 等价，指的内容不能改、指向可改；<code>int * const p</code> 是常量指针，指向不能改、内容可改；<code>const int * const p</code> 两者都不能改。</p>`,
+        core: `<p>const 在 * 左边修饰指向的内容，在 * 右边修饰指针本身；两边都有则指针和内容都不能改。</p>`,
         answer: `<p>记忆口诀是“const 在 <code>*</code> 左边，修饰指向的内容；在 <code>*</code> 右边，修饰指针本身”。</p>
 <p><code>const int *p1</code> 和 <code>int const *p2</code> 完全等价，都是<strong>指向常量的指针</strong>：不能通过 p 修改目标，但 p 本身可以改指向。</p>
 <p><code>int * const p3</code> 是<strong>常量指针</strong>：p3 一旦初始化就不能再指向别处，但可以通过它修改目标的值。</p>
@@ -350,7 +350,7 @@ int main(void)
     return 0;
 }</code></pre>`,
         exam: `<p>这题几乎每场嵌入式面试都会问。真正的考点不是“数组名是常量指针”这种半对半错的说法，而是<strong>数组类型</strong>与<strong>指针类型</strong>在 <code>sizeof</code>、取地址、赋值、传参退化上的差异。</p>`,
-        core: `<p>数组是一块连续内存，类型是 <code>int[10]</code>；指针是保存地址的变量。数组名在 <code>sizeof</code> 里代表整个数组（40 字节），指针得到的是指针自身大小（32 位 4、64 位 8）。</p><p>数组名是地址常量，不能赋值、不能自增；指针可以。数组作形参会退化成 <code>int *</code>，方括号里的长度被忽略，所以函数里拿不到长度，必须另传长度或把数组与长度包进结构体。</p>`,
+        core: `<p>数组是连续内存、数组名是地址常量，sizeof 得到整个数组大小；指针是保存地址的变量，sizeof 只得到指针大小，作形参还会退化成指针。</p>`,
         answer: `<p><b>先给结论：</b>两行输出依次是 <code>40</code> 和 <code>4</code>（32 位平台）；64 位平台上第二行是 <code>8</code>。第一行的 40 来自数组 <code>a</code> 本身（10 × 4 字节），第二行的 4/8 来自退化成指针后的形参 <code>arr</code>。</p>
 <p>原因是：数组是一块连续的内存，类型是 <code>int[10]</code>；指针是一个保存地址的变量，类型是 <code>int *</code>。它们不是一回事。</p>
 <p>最直接的差别是 <code>sizeof</code>：数组名在 <code>sizeof</code> 里代表整个数组，得到 40；指针得到的是指针本身的大小，32 位平台是 4，64 位是 8。</p>
@@ -441,7 +441,7 @@ void frame_clear(frame_t *f)
 <pre><code>struct A { char a; int b; short c; };
 struct B { int b; short c; char a; };</code></pre>`,
         exam: `<p>考点有三层：会不会算（规则）；知不知道为什么要对齐（硬件访问效率与总线限制）；能不能说出 <code>#pragma pack</code> 的风险（非对齐访问异常、性能下降）。能主动提到“协议解析应该用字节序安全的拷贝而不是强转结构体”，基本就是加分项。</p>`,
-        core: `<p>三条规则：成员起始偏移必须是其对齐要求的整数倍；结构体总大小必须是最大对齐数的整数倍；嵌套结构体按内部最大成员对齐。</p><p>例：<code>{ int a; char b; char c; }</code> 偏移是 0/4/5，总长 6 补到 8。成员顺序不同大小会差几字节，RAM 紧张时把大成员放前面。</p>`,
+        core: `<p>成员按自身对齐要求放置、结构体总大小按最大对齐数补齐，所以 int/char/char 的偏移是 0/4/5、实际占 8 字节。</p>`,
         answer: `<p>规则有三条：</p>
 <p>第一，每个成员的<strong>起始偏移</strong>必须是该成员大小（严格说是对齐要求）的整数倍，不满足就在前面填充字节。</p>
 <p>第二，结构体的<strong>总大小</strong>必须是其中最大对齐数的整数倍，不够就在末尾补齐，这样数组里每个元素都能正确对齐。</p>
@@ -534,7 +534,7 @@ int main(void)
         point: "分配方式、增长方向、生命周期、碎片与实时性，是理解 MCU 内存布局的入口。",
         q: `<p>面试官：<strong>堆和栈有什么区别？</strong>在你的项目里，什么情况下会用 malloc？为什么很多嵌入式规范禁止动态内存？</p>`,
         exam: `<p>考察对内存模型的整体认识，以及工程判断力。能说出“栈向下增长、满递减”“堆向上增长、由 malloc 管理”“栈溢出会踩到 .bss 或堆”这些具体细节，说明你调试过真实问题；能说出 MISRA C 和静态分配方案，说明你有规范意识。</p>`,
-        core: `<p>栈由编译器管理，函数进出自动分配释放，存局部变量、参数、返回地址，速度快但只有几 KB，Cortex-M 上满递减。</p><p>堆由 <code>malloc/free</code> 手动管理，灵活但慢，会产生碎片，分配耗时不确定。嵌入式尽量不用：长期运行后可能分配失败、破坏实时性、堆大小链接时就固定。</p><p>替代方案：编译期确定的用静态数组，变长的用固定块内存池，分配释放 O(1) 且不碎片化。</p>`,
+        core: `<p>栈由编译器自动分配释放，速度快但只有几 KB；堆用 malloc/free 手动管理，灵活但慢且会产生碎片，嵌入式优先用静态数组或内存池。</p>`,
         answer: `<p>栈由编译器管理，函数调用时自动分配、返回时自动释放，存放局部变量、函数参数、返回地址和寄存器现场。它速度快，就是一条压栈指令，但空间很小，通常几 KB。在 Cortex-M 上栈是<strong>满递减</strong>的，从高地址往低地址长。</p>
 <p>堆由程序员通过 malloc/free 手动管理，空间来自一段预留的 RAM 区，通常从低地址往高地址长。它灵活但慢，而且会产生<strong>内存碎片</strong>：反复分配释放不同大小的块之后，总空闲量够但找不到连续的大块，分配就会失败。</p>
 <p>嵌入式里尽量不用 malloc 有三个原因：一是碎片导致长期运行后分配失败，这种故障往往在设备跑了几小时后才出现；二是分配耗时不确定，破坏实时性；三是堆大小在链接时就固定了，估计不足只能改代码重新烧写。</p>
@@ -630,7 +630,7 @@ void pool_free(void *p)
         point: "三类指针错误的成因与防护手段，是代码健壮性的基本功。",
         q: `<p>面试官：<strong>野指针、空指针、悬空指针</strong>分别是什么？在你的代码里怎么避免？如果线上设备偶发 HardFault，怀疑是野指针，你会怎么定位？</p>`,
         exam: `<p>这题的关键不是定义，而是<strong>防护习惯</strong>和<strong>定位手段</strong>。能说出“定义即初始化、释放即置空、入参先判空、用 MPU 或填充法定位”，说明你写过需要长期稳定运行的代码。</p>`,
-        core: `<p>野指针从未初始化，指向随机地址；空指针明确为 <code>NULL</code>，本身安全，危险的是不判空就解引用；悬空指针是所指对象已释放或失效——<code>free</code> 后没置空、指向已退栈的局部变量。</p><p>避免四条：定义即初始化、<code>free</code> 后立即置 <code>NULL</code>、入参与返回值使用前判空、不返回局部变量地址。</p>`,
+        core: `<p>野指针未初始化、悬空指针指向已释放或已退栈的内存，空指针是明确的 NULL；避免办法是定义即初始化、free 后置空、使用前判空。</p>`,
         answer: `<p>三个概念的区别在“指针指向哪里”：</p>
 <p><strong>野指针</strong>是从来没被初始化过的指针，它的值是一个随机地址，解引用等于随机写内存。</p>
 <p><strong>空指针</strong>是明确赋值为 NULL 的指针，表示“不指向任何对象”。它本身是安全的，危险的是不判空就解引用。</p>
@@ -719,7 +719,7 @@ void good_free(void)
         point: "函数指针语法、typedef 简化、表驱动与回调注册，是解耦和状态机的核心工具。",
         q: `<p>面试官：请写出一个函数指针的定义，并用它实现<strong>命令解析表</strong>。如果让你设计一个串口接收回调，接口应该怎么定？</p>`,
         exam: `<p>函数指针是嵌入式 C 的分水岭。会写语法只是及格；能用它做表驱动、做驱动 ops 结构、做回调注册，并且知道回调里不能做耗时操作、要注意上下文（中断还是任务），才是面试官想听的。</p>`,
-        core: `<p>定义形式是 <code>返回类型 (*名字)(参数表)</code>，工程上一律 <code>typedef</code>：<code>typedef int (*calc_fn)(int,int);</code>。</p><p>三个用途：回调（底层收到数据调上层注册的函数）、表驱动（命令表代替长 <code>if-else</code>）、ops 结构（同一套上层代码适配不同硬件）。</p><p>串口回调接口：<code>void (*on_frame)(const uint8_t *data, uint16_t len, void *ctx)</code>，带上下文指针避免全局变量；并约定回调在中断上下文执行，不能阻塞、不能睡眠。</p>`,
+        core: `<p>函数指针保存函数地址，写法是 返回类型 (*p)(参数)，工程上用 typedef 定义；常用于回调、命令表和驱动 ops 结构。</p>`,
         answer: `<p>函数指针的定义是 <code>返回类型 (*指针名)(参数列表)</code>，比如 <code>int (*fp)(int, int)</code>。因为声明语法可读性差，工程上一律用 typedef：<code>typedef int (*calc_fn)(int, int);</code>，之后就可以像普通类型一样使用。</p>
 <p>它最常见的三个用途：一是<strong>回调</strong>，底层驱动收到数据后调用上层注册的函数，实现方向反转的解耦；二是<strong>表驱动</strong>，把命令字符串和对应的处理函数放进数组，用查表替代一长串 if-else；三是<strong>虚函数表</strong>式的 ops 结构，让同一套上层代码适配不同硬件。</p>
 <p>设计串口回调时，我会把接口定为 <code>void (*on_frame)(const uint8_t *data, uint16_t len, void *ctx)</code>，多带一个上下文指针，避免用全局变量传递实例。同时明确约定：回调在中断上下文执行，不能阻塞、不能调用可能睡眠的接口，重活要投递到任务里做。</p>`,
@@ -839,7 +839,7 @@ void USART1_IRQHandler(void)
         point: "置位、清位、取反、读位的标准写法，以及读-改-写竞态与 1<<31 的未定义行为。",
         q: `<p>面试官：<strong>怎么把寄存器的第 3 位置 1、清 0、翻转？</strong>如果要同时操作多个位呢？写寄存器时要注意什么？</p>`,
         exam: `<p>这是嵌入式最基础的动手能力。除了语法，面试官会追问“读-改-写是否原子”“为什么用 BSRR”“1&lt;&lt;31 有什么问题”，这些才是真实项目里踩过的坑。</p>`,
-        core: `<p>置位 <code>reg |= (1U&lt;&lt;n)</code>，清零 <code>reg &amp;= ~(1U&lt;&lt;n)</code>，翻转 <code>reg ^= (1U&lt;&lt;n)</code>，读位 <code>(reg&gt;&gt;n)&amp;1U</code>；多位先清后或：<code>reg = (reg &amp; ~MASK) | (val &lt;&lt; shift)</code>。</p><p>三个坑：常量带 <code>U</code>，<code>1&lt;&lt;31</code> 是有符号左移；读改写不是原子操作，中断也改同一寄存器要用 BSRR 或关中断；外设寄存器必须经 <code>volatile</code> 指针访问。</p>`,
+        core: `<p>置位用 reg |= (1U&lt;&lt;n)，清零用 reg &= ~(1U&lt;&lt;n)，翻转用 reg ^= (1U&lt;&lt;n)；读改写不是原子操作，寄存器还必须用 volatile 指针访问。</p>`,
         answer: `<p>标准写法是四个：置位用 <code>reg |= (1U &lt;&lt; n)</code>；清零用 <code>reg &amp;= ~(1U &lt;&lt; n)</code>；翻转用 <code>reg ^= (1U &lt;&lt; n)</code>；读某一位用 <code>(reg &gt;&gt; n) &amp; 1U</code>。</p>
 <p>多位操作用掩码：先清掉目标位再或上新值，也就是 <code>reg = (reg &amp; ~MASK) | (val &lt;&lt; shift)</code>，这个模式叫 read-modify-write。</p>
 <p>要注意三点：第一，常量一定要带 <code>U</code>，<code>1 &lt;&lt; 31</code> 是有符号左移，属于未定义行为；第二，读-改-写不是原子操作，如果中断里也在改同一个寄存器，会丢更新，这种情况要用硬件提供的原子置位寄存器（比如 STM32 的 BSRR）或者关中断；第三，外设寄存器必须通过 volatile 指针访问，否则编译器可能把多次写合并。</p>`,
@@ -934,7 +934,7 @@ static inline int popcount(uint32_t x)
         point: "字节序概念、判断方法，以及协议解析中为什么不能直接强转结构体。",
         q: `<p>面试官：<strong>什么是大端和小端？</strong>写一段代码判断当前机器是哪一种。如果两个设备端序不同，通信时怎么处理？</p>`,
         exam: `<p>端序是跨平台通信的必踩坑。会写判断代码只是入门，能说清“网络字节序是大端”“STM32 是小端”“协议里多字节字段要按约定序列化”，才算真正理解。</p>`,
-        core: `<p>大端把高字节放低地址（人类阅读顺序），小端把低字节放低地址；<code>0x12345678</code> 在内存里分别是 <code>12 34 56 78</code> 和 <code>78 56 34 12</code>。</p><p>判断用 <code>union { uint16_t v; uint8_t b[2]; }</code> 赋 1，看 <code>b[0]</code> 是否为 1。协议必须规定字节序（通常用大端/网络序），收发用 <code>htons/htonl</code> 转换，别把接收缓冲直接强转成结构体。</p>`,
+        core: `<p>大端把高字节放低地址，小端把低字节放低地址；可用 union 赋 1 看最低地址字节来判断，协议传输必须统一字节序并做转换。</p>`,
         answer: `<p>端序说的是<strong>多字节数据在内存中的存放顺序</strong>。大端把高字节放在低地址，也就是“人类阅读顺序”；小端把低字节放在低地址。</p>
 <p>举例：<code>0x12345678</code> 存放在地址 0x1000，大端是 <code>12 34 56 78</code>，小端是 <code>78 56 34 12</code>。</p>
 <p>判断方法最常用的是 union：定义一个 <code>uint16_t</code> 赋值为 1，看第一个字节是不是 1，是就是小端。也可以用指针强制转换，效果一样。</p>
@@ -1033,7 +1033,7 @@ static inline uint32_t swap32(uint32_t v)
 #define MAX(a, b) ((a) > (b) ? (a) : (b))</code></pre>
 <p>再问：多语句宏为什么要用 <code>do { } while (0)</code> 包起来？</p>`,
         exam: `<p>考察对预处理“纯文本替换”本质的理解。能不能说出“宏没有类型检查、参数会被多次求值、副作用会翻倍”，以及“能用 inline 就别用宏”，是区分“会写”和“写得好”的关键。</p>`,
-        core: `<p><code>SQUARE(1+2)</code> 展开成 <code>1+2*1+2</code> 得 5；参数出现两次，<code>SQUARE(i++)</code> 还会自增两次。</p><p>安全写法：参数和整体都加括号 <code>#define SQUARE(x) ((x)*(x))</code>，但这只解决优先级、解决不了副作用，优先用 <code>static inline</code> 函数；多语句宏必须用 <code>do { ... } while (0)</code> 包成一条语句。</p>`,
+        core: `<p>#define SQUARE(x) ((x)*(x)) 只解决优先级，解决不了 i++ 被求值两次；多语句宏要用 do{...}while(0) 包起来，能写函数时优先 static inline。</p>`,
         answer: `<p><code>SQUARE(x)</code> 有两个问题：一是没加括号，<code>SQUARE(1+2)</code> 展开成 <code>1+2*1+2</code> 得 5；二是参数出现两次，<code>SQUARE(i++)</code> 会让 i 自增两次，属于未定义行为。</p>
 <p>正确写法是 <code>#define SQUARE(x) ((x) * (x))</code>，但这仍然解决不了副作用问题，所以更好的做法是写成 <code>static inline</code> 函数。</p>
 <p><code>MAX</code> 虽然加了括号，但 <code>MAX(i++, j++)</code> 依然会让其中一个自增两次——因为三元运算符只求值一个分支，但条件里比较时两个都求值了，被选中的那个又求值一次。</p>
@@ -1122,7 +1122,7 @@ STATIC_ASSERT(sizeof(uint32_t) == 4, u32_must_be_4_bytes);`
         point: "预处理/编译/汇编/链接四阶段，以及 .text/.data/.bss/heap/stack 的归属。",
         q: `<p>面试官：一个 .c 文件<strong>变成可烧录的 bin 文件</strong>，中间经历了哪些步骤？全局变量、初始化为 0 的变量、字符串常量分别放在哪个段？为什么 .bss 不占 Flash 空间？</p>`,
         exam: `<p>这题把 C 语言、链接脚本、启动流程串起来了。能说清 .data 需要在启动时从 Flash 拷贝到 RAM、.bss 需要清零，就理解了启动文件里那段汇编在干什么，也就理解了“为什么未初始化的大数组不占 Flash”。</p>`,
-        core: `<p>四个阶段：预处理（展开宏、包含头文件、条件编译）→ 编译（生成汇编）→ 汇编（生成 <code>.o</code>）→ 链接（按链接脚本合并成 elf，再 objcopy 成 bin/hex）。</p><p>归属：代码和常量在 <code>.text/.rodata</code>（Flash）；初始化的全局/静态变量在 <code>.data</code>，初值存 Flash、运行时拷到 RAM；未初始化或为 0 的在 <code>.bss</code>，只占 RAM 不占 Flash；堆和栈是 RAM 里划出的区域。</p>`,
+        core: `<p>编译分预处理、编译、汇编、链接四步；代码和常量进 .text/.rodata，初始化变量进 .data，未初始化或零初始化变量进 .bss。</p>`,
         answer: `<p>四个阶段：<strong>预处理</strong>展开宏、包含头文件、处理条件编译；<strong>编译</strong>把 C 代码翻译成汇编；<strong>汇编</strong>把汇编翻译成目标文件 .o；<strong>链接</strong>把多个 .o 和库按链接脚本的地址布局合并成 elf，再用 objcopy 转成 bin/hex。</p>
 <p>段的归属：代码和只读常量放在 <code>.text</code> 和 <code>.rodata</code>，都在 Flash；初始化为非零的全局/静态变量放 <code>.data</code>，它的<strong>初值</strong>存在 Flash，运行时需要拷贝到 RAM；未初始化或初始化为 0 的放 <code>.bss</code>，只记录“需要多大空间”，不存实际数据，所以不占 Flash。</p>
 <p>堆和栈不存放在任何静态段里，它们是在 RAM 中划出的两块区域，堆由 malloc 管理，栈由 MSP/PSP 管理。</p>`,
@@ -1193,7 +1193,7 @@ arm-none-eabi-objcopy -O ihex   app.elf app.hex`
         point: "未定义行为的本质是编译器可以做任何事，考察对优化与语言契约的理解。",
         q: `<p>面试官：<code>i = i++ + ++i;</code> 的结果是多少？为什么说它是<strong>未定义行为</strong>？还有哪些常见写法属于未定义行为？在嵌入式中会带来什么实际后果？</p>`,
         exam: `<p>这是区分“背过八股”和“理解语言模型”的题。核心是：UB 不是“结果不确定”，而是“编译器可以做任何事，包括把整段代码删掉”。能举出有符号溢出、越界、空指针解引用、未初始化读取这些真实会咬人的例子，说明你调试过优化引发的问题。</p>`,
-        core: `<p><code>i = i++ + ++i;</code> 的结果没有意义：同一标量在同一个表达式里被修改多次，标准直接规定是未定义行为。</p><p>危险在于编译器可以假设 UB 不存在：删循环、把判断优化成恒真、生成陷阱指令。常见 UB 还有有符号溢出、数组越界、空指针解引用、<code>1&lt;&lt;31</code>、<code>free</code> 后使用、<code>memcpy</code> 源目标重叠。表现就是 -O0 正常、-O2 出错。</p>`,
+        core: `<p>i = i++ + ++i 在同一表达式里多次修改同一变量，属于未定义行为；编译器可据此做任意优化，常见表现是 -O0 正常、-O2 出错。</p>`,
         answer: `<p>这个表达式的结果是<strong>未定义的</strong>，不是“先算左边”或“先算右边”的问题。C 标准规定，如果一个标量对象在同一个表达式中被修改两次，或者被修改的同时又被读取（且读取的值不用于确定写入的值），行为就是未定义的。</p>
 <p>关键在于：UB 不等于“结果随机但程序继续跑”。编译器可以假设 UB 不会发生，从而做出任意优化——包括把整个循环删掉、把判断优化成恒真、甚至生成陷阱指令。</p>
 <p>常见的 UB 还有：有符号整数溢出（<code>INT_MAX + 1</code>）、数组越界访问、解引用空指针或野指针、读取未初始化的自动变量、<code>1 &lt;&lt; 31</code>、把越界指针用于算术、<code>free</code> 后继续使用、<code>memcpy</code> 源和目标重叠。</p>
@@ -1319,7 +1319,7 @@ int ub_demo3(void)
         point: "分清声明与定义，理解头文件被多个源文件包含后的重复定义问题。",
         q: `<p>面试官：我写了一个 <code>config.h</code>，里面写了 <code>int g_flag = 0;</code>，两个 .c 都 include 它，编译报 multiple definition。为什么？正确写法是什么？</p>`,
         exam: `<p>考察对编译链接模型的理解。能说清“声明不分配空间、定义分配空间”，以及头文件是被文本展开到每个 .c 里的，就算过关。</p>`,
-        core: `<p><code>extern</code> 只是声明：告诉编译器名字和类型存在，不分配空间；定义才分配。同一变量可以声明多次、只能定义一次。</p><p>头文件会被展开到每个 <code>.c</code>，在里面写 <code>int g_flag = 0;</code> 等于多处定义，链接时报 multiple definition。正确做法：头文件写 <code>extern int g_flag;</code>，某一个 <code>.c</code> 里定义。函数默认外部链接，头文件写原型即可。</p>`,
+        core: `<p>extern 只是声明、不分配空间，定义才分配；头文件里写 extern int g_flag，变量定义放到某一个 .c 里，否则会重复定义。</p>`,
         answer: `<p><b>声明</b>只是告诉编译器“这个名字存在、类型是什么”，不分配存储；<b>定义</b>才会真正分配空间。同一个变量可以声明很多次，但只能定义一次。</p>
 <p>头文件的内容会被预处理原样展开到每个包含它的 .c 文件里。所以在头文件里写 <code>int g_flag = 0;</code>，等于在两个 .c 里各定义了一次同名全局变量，链接器发现两个强符号，直接报 multiple definition。</p>
 <p>正确做法是：</p>
@@ -1368,7 +1368,7 @@ int ub_demo3(void)
         point: "struct 成员独立、union 成员共享、enum 是整型常量集合；union 常用于协议解析和类型双关。",
         q: `<p>面试官：说说 struct、union、enum 的区别。union 除了“省内存”还有什么实际用途？</p>`,
         exam: `<p>考察对复合类型内存布局的理解。很多人只知道 union 共享内存，说不出它在协议解析、寄存器访问、大小端检测中的用法。</p>`,
-        core: `<p><code>struct</code> 成员各占空间、可同时有效，大小含对齐填充；<code>union</code> 成员共用一块内存，大小取最大成员，同一时刻只有一个有效；<code>enum</code> 是命名整型常量，本质是整数。</p><p><code>union</code> 常用于协议解析（字节与字段共用一块内存）、查看 float 位模式、判断端序、寄存器整体/位域双视图，但位域布局是实现定义的。</p>`,
+        core: `<p>struct 成员各占空间、可同时有效；union 成员共用一块内存、同一时刻只有一个有效；enum 本质是命名整型常量。</p>`,
         answer: `<p><b>struct</b>：每个成员有独立的存储空间，总大小是各成员大小之和再加上对齐填充。成员可以同时有效。</p>
 <p><b>union</b>：所有成员共用同一块内存，大小等于最大成员的大小（并按最大对齐要求取整）。同一时刻只有一个成员是“有意义”的，写入一个成员会覆盖其它成员。</p>
 <p><b>enum</b>：一组命名的整型常量。它本质上是整型，大小由编译器决定（通常是 int，可以用 <code>-fshort-enums</code> 改成最小类型）。枚举让状态机、错误码可读性更好，调试器也能显示符号名。</p>
@@ -1451,7 +1451,7 @@ typedef union {
         point: "typedef 是编译器处理的类型别名，有作用域和类型检查；define 是预处理文本替换。",
         q: `<p>面试官：<code>typedef</code> 和 <code>#define</code> 都能“起别名”，它们有什么本质区别？为什么定义函数指针类型推荐用 typedef？</p>`,
         exam: `<p>考察预处理与编译阶段的区别。能举出 <code>#define PTR char*</code> 导致 <code>PTR a, b;</code> 只有 a 是指针的例子，就说明理解到位了。</p>`,
-        core: `<p><code>#define</code> 是预处理文本替换，不做类型检查；<code>typedef</code> 是编译器处理的类型别名，有作用域、参与类型检查。</p><p>典型差异：<code>#define PTR char*</code> 后 <code>PTR a,b;</code> 只有 <code>a</code> 是指针；<code>typedef char* PTR</code> 后两个都是。函数指针一律用 <code>typedef</code>，否则 <code>void (*signal(int, void (*)(int)))(int)</code> 这种声明没法读。</p>`,
+        core: `<p>#define 是预处理文本替换、不做类型检查；typedef 是编译器处理的类型别名，有作用域，也能保证多个变量类型一致。</p>`,
         answer: `<p>两者处在完全不同的阶段：</p>
 <ul>
 <li><b>#define</b> 由预处理器做纯文本替换，发生在编译之前。它不知道类型，也不做语法检查，替换结果可能因为运算符优先级、逗号、分号而出错。</li>
@@ -1520,7 +1520,7 @@ typedef struct {
         point: "指针加减以所指类型为单位，数组名退化为首元素指针，二级指针用于修改调用者的指针。",
         q: `<p>面试官：<code>int *p; p + 1</code> 地址偏移多少字节？数组名和指针到底哪里不一样？二级指针什么时候必须用？</p>`,
         exam: `<p>考察指针的底层模型。能说清“步长由类型决定”和“数组名不是指针，只是大多数表达式里会退化”，说明理解得比较深。</p>`,
-        core: `<p>指针加减以所指类型的大小为单位：<code>int *p</code> 的 <code>p+1</code> 走 4 字节；两个指针相减得到元素个数，不是字节数。</p><p>数组名多数场合退化为首元素指针，但 <code>sizeof</code>、<code>&amp;arr</code>、字符串字面量初始化除外，且数组名不是左值。二级指针用来修改“指针本身”：函数内给指针分配内存、改链表头、传指针数组。</p>`,
+        core: `<p>指针加减以所指类型大小为单位，两指针相减得到元素个数；数组名多数场合退化为首元素指针，但 sizeof 和 &arr 例外。</p>`,
         answer: `<p><b>指针运算以所指类型的大小为单位。</b><code>int *p</code> 的 <code>p + 1</code> 偏移 <code>sizeof(int)</code> 字节（通常是 4），<code>char *q</code> 的 <code>q + 1</code> 偏移 1 字节。指针相减得到的是<b>元素个数</b>，不是字节数。</p>
 <p><b>数组名和指针的区别：</b></p>
 <ul>
@@ -1604,7 +1604,7 @@ void push_front(node_t **head, node_t *n)
         point: "字面量在只读段不可修改，sizeof 与 strlen 语义不同，strcpy 不检查边界。",
         q: `<p>面试官：<code>char *s = "abc";</code> 和 <code>char a[] = "abc";</code> 有什么区别？为什么说 <code>strcpy</code> 不安全？</p>`,
         exam: `<p>考察字符串的内存模型和安全意识。能指出字面量位于只读段、修改会崩溃，以及 <code>strncpy</code> 不保证以 0 结尾，是比较完整的回答。</p>`,
-        core: `<p><code>char *s="abc"</code> 的字符在只读段，<code>s</code> 只是指针，改 <code>s[0]</code> 会崩；<code>char a[]="abc"</code> 在栈上分配 4 字节并复制内容，可以修改。</p><p><code>sizeof(a)=4</code>、<code>strlen(a)=3</code>，而 <code>sizeof(s)</code> 只是指针大小。<code>strcpy</code> 不接收目标长度，源串过长直接越界，应改用 <code>snprintf</code> 或带长度检查的封装；<code>strncpy</code> 不保证补 <code>\0</code>。</p>`,
+        core: `<p>char *s=“abc” 指向只读段、改内容会崩；char a[]=“abc” 在栈上复制一份、可以修改，sizeof 为 4 而 strlen 为 3。</p>`,
         answer: `<p><b>存储位置不同：</b><code>char *s = "abc"</code> 中，字符串字面量存放在只读数据段（.rodata），<code>s</code> 只是指向它的指针；<code>char a[] = "abc"</code> 则在栈上分配 4 个字节（含结尾的 <code>'\0'</code>），并把内容复制进去，可以随意修改。</p>
 <p>所以 <code>s[0] = 'x'</code> 在多数平台会触发段错误，而 <code>a[0] = 'x'</code> 完全合法。</p>
 <p><b>sizeof 与 strlen：</b><code>sizeof(a)</code> 是数组总大小（4），<code>strlen(a)</code> 是不含 <code>'\0'</code> 的长度（3）；<code>sizeof(s)</code> 是指针大小（4 或 8），不是字符串长度。这是最常见的错误之一。</p>
@@ -1680,7 +1680,7 @@ void demo(void)
         point: "memcpy 不处理内存重叠，memmove 根据地址关系决定从前往后还是从后往前拷贝。",
         q: `<p>面试官：<code>memcpy</code> 和 <code>memmove</code> 有什么区别？如果源和目标缓冲区重叠，用 memcpy 会发生什么？请手写一个 memmove。</p>`,
         exam: `<p>考察对内存重叠的理解和基本编码能力。关键点是判断 <code>dst &lt; src</code> 还是 <code>dst &gt; src</code>，决定拷贝方向。</p>`,
-        core: `<p><code>memcpy</code> 假定源和目标不重叠，可以按字批量拷；重叠时前面的写入会覆盖后面还没读的数据，结果不可预期。</p><p><code>memmove</code> 判方向：<code>dst &lt; src</code> 正序，<code>dst &gt; src &amp;&amp; dst &lt; src+n</code> 逆序，不重叠则随意。实现用 <code>unsigned char *</code> 逐字节最稳，两者都返回 <code>dst</code>。</p>`,
+        core: `<p>memcpy 假定源和目标不重叠，重叠时要用 memmove；memmove 会根据地址方向决定正序还是逆序拷贝。</p>`,
         answer: `<p><b>memcpy</b> 假定源和目标内存区域<b>不重叠</b>，实现可以按字（4/8 字节）批量拷贝以获得高性能；一旦重叠，前面的写入会覆盖后面还没读的数据，结果不可预期。</p>
 <p><b>memmove</b> 明确支持重叠，做法是判断方向：</p>
 <ul>
@@ -1752,7 +1752,7 @@ void *my_memmove(void *dst, const void *src, size_t n)
         point: "位域布局由实现定义，不能取地址，跨平台不可移植，volatile 位域读写非原子。",
         q: `<p>面试官：结构体里用 <code>unsigned int flag : 1;</code> 定义位域很方便，为什么很多公司规范禁止用它操作寄存器？</p>`,
         exam: `<p>考察对“实现定义行为”的敏感度。能说出位序、跨字节、不能取地址、并发读写这四个问题，说明真正踩过坑。</p>`,
-        core: `<p>位域的分配方向、跨存储单元处理和填充都由实现定义，GCC 与 IAR、ARM 与 x86 可能布局不同；还不能取地址、<code>sizeof</code> 不可移植，读写是“读整字→改位→写回”，不是原子操作。</p><p>寄存器操作别用位域，用显式移位和掩码：<code>REG = (REG &amp; ~MASK) | ((val &lt;&lt; POS) &amp; MASK)</code>，再配合 <code>volatile</code> 和临界区保护。</p>`,
+        core: `<p>位域的布局、跨存储单元处理和填充都由实现定义，不能取地址，也不是原子操作；寄存器操作应改用显式移位加掩码。</p>`,
         answer: `<p>位域看起来很适合寄存器，但有几个硬伤：</p>
 <ol>
 <li><b>布局由实现定义。</b>标准没有规定位域从低位还是高位开始分配，也没规定跨存储单元时怎么处理。同一个结构体在 GCC 和 IAR 上、在 ARM 和 x86 上，内存布局可能不同。</li>
@@ -1832,7 +1832,7 @@ static inline void ctrl_set_mode(volatile uint32_t *reg, uint32_t mode)
         point: "理解 AAPCS 传参规则、LR 保存返回地址、栈帧的建立与销毁，以及递归为什么会爆栈。",
         q: `<p>面试官：调用一个函数时，CPU 和栈具体做了哪些事？为什么递归太深会栈溢出？</p>`,
         exam: `<p>考察对运行时机制的理解，也是分析 HardFault 和栈溢出的基础。能说出 R0-R3 传参、LR 存返回地址、栈帧保存局部变量和寄存器，就足够扎实。</p>`,
-        core: `<p>AAPCS：前 4 个整型/指针参数放 <code>R0-R3</code>，多的压栈；<code>BL</code> 把返回地址写进 <code>LR</code>；被调函数 <code>PUSH {r7, lr}</code> 建栈帧并给局部变量留空间；返回时结果放 <code>R0</code>，<code>POP {r7, pc}</code> 恢复。</p><p>递归 N 层就有 N 个栈帧。栈大小在启动文件/链接脚本里固定，超了会踩堆或 HardFault；RTOS 每个任务独立栈，按最坏调用深度留余量。</p>`,
+        core: `<p>AAPCS 规定前四个整型参数放 R0-R3、其余压栈，返回值放 R0，LR 保存返回地址；每层函数调用都占栈帧，递归深度直接决定栈用量。</p>`,
         answer: `<p>以 Cortex-M 的 AAPCS 调用约定为例：</p>
 <ol>
 <li><b>传参</b>：前 4 个整型/指针参数放在 R0-R3，超出的参数压栈；浮点参数在带 FPU 时用 S0-S15。</li>
@@ -1908,7 +1908,7 @@ int factorial_iter(int n)
         point: "inline 是类型安全的函数，宏是文本替换；头文件里用 static inline 避免多重定义。",
         q: `<p>面试官：<code>inline</code> 函数和宏都能“减少调用开销”，它们有什么区别？为什么头文件里通常写 <code>static inline</code>？</p>`,
         exam: `<p>考察对编译模型和优化行为的理解。能说清 inline 只是建议、static inline 解决头文件多重定义问题，就抓住了要点。</p>`,
-        core: `<p>宏是预处理文本替换：无类型检查、无作用域、参数可能重复求值；<code>inline</code> 是真函数，有类型检查、参数只求值一次，但内联只是建议。</p><p>头文件里写 <code>static inline</code>：每个编译单元各得一份内部链接副本，不会重复定义冲突，函数体可见仍可内联。C99 的裸 <code>inline</code> 还要另在一个 <code>.c</code> 里提供外部定义，容易踩坑。</p>`,
+        core: `<p>宏是预处理替换、无类型检查且参数可能重复求值；inline 是真正的函数、有类型检查，但内联只是编译器的建议。</p>`,
         answer: `<p><b>宏</b>是预处理阶段的文本替换：没有类型检查、没有作用域、参数可能被求值多次、调试时看不到函数名。优点是彻底没有调用开销，且可以处理类型泛型（如 <code>MIN/MAX</code>）。</p>
 <p><b>inline 函数</b>是真正的函数：有类型检查、参数只求值一次、可以调试、遵循作用域规则。编译器可以选择内联展开，也可以不展开——<code>inline</code> 只是建议，不是命令。</p>
 <p><b>为什么头文件里写 static inline：</b></p>
@@ -1984,7 +1984,7 @@ static inline void reg_set_bits(volatile uint32_t *reg, uint32_t mask)
         point: "小于 int 的类型先提升为 int，有符号与无符号混合运算按无符号处理，负数变成极大值。",
         q: `<p>面试官：<code>if (-1 &gt; 0u)</code> 的结果是什么？为什么？无符号循环倒序为什么会死循环？</p>`,
         exam: `<p>考察对 C 类型转换规则的掌握。这类 bug 极其隐蔽，能讲清“usual arithmetic conversions”说明基本功扎实。</p>`,
-        core: `<p><code>-1 &gt; 0u</code> 为真：混合运算时 <code>-1</code> 被转成 <code>unsigned int</code>，即 <code>UINT_MAX</code>。</p><p>同类坑：无符号倒序循环 <code>i&gt;=0</code> 死循环；<code>size_t</code> 下 <code>len-1&gt;=0</code> 恒真；<code>char</code> 是否有符号由实现决定；<code>uint8_t</code> 相加先提升为 <code>int</code>，200+100 得 300 而不是 44。</p><p>对策：比较前显式转成同一类型，长度用 <code>size_t</code> 并避免减到负数，开 <code>-Wsign-compare -Wconversion</code>。</p>`,
+        core: `<p>有符号和无符号混合运算会先把有符号数转成无符号，所以 -1 > 0u 为真；无符号循环 i>=0 也会死循环，比较前应显式统一类型。</p>`,
         answer: `<p><code>-1 &gt; 0u</code> 的结果是<b>真</b>。原因是两个操作数类型不同时，会先做“寻常算术转换”：如果无符号类型的等级不低于有符号类型，就把有符号操作数转换成无符号。<code>-1</code> 转成 <code>unsigned int</code> 后是 <code>UINT_MAX</code>，当然大于 0。</p>
 <p>常见坑还有：</p>
 <ul>

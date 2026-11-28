@@ -34,7 +34,7 @@
         point: "xTaskCreate / xTaskCreateStatic 的内存来源、vTaskDelete 的回收时机，以及删除任务时的资源风险。",
         q: `<p>面试官：FreeRTOS 里创建一个任务要传哪些参数？xTaskCreate 和 xTaskCreateStatic 有什么区别？任务删除后栈和 TCB 是谁回收的？</p>`,
         exam: `<p>考察任务生命周期。能说清“动态从 heap 分配、静态由用户提供内存、删除后空闲任务回收”，以及“删任务不等于释放它持有的资源”，就很好。</p>`,
-        core: `<p>创建参数：<code>pxTaskCode</code> 任务函数 <code>void task(void *pvParameters)</code>，不能返回（返回进 <code>prvTaskExitError</code>）；<code>pcName</code> 调试用，受 <code>configMAX_TASK_NAME_LEN</code> 限制；<code>usStackDepth</code> 单位是字不是字节（Cortex-M 128 = 512 字节）；<code>pvParameters</code> 不能传返回就失效的局部变量地址；<code>uxPriority</code> 0 最低、必须小于 <code>configMAX_PRIORITIES</code>；<code>pxCreatedTask</code> 返回句柄。</p><p>动态 <code>xTaskCreate</code> 的 TCB 和栈从 FreeRTOS heap 分配，方便但运行期可能失败、会有碎片；静态 <code>xTaskCreateStatic</code> 由调用者提供 <code>StaticTask_t</code> 和栈数组，不依赖 heap，适合禁动态分配或要精确布局 RAM 的项目，需 <code>configSUPPORT_STATIC_ALLOCATION = 1</code>。</p><p>删除用 <code>vTaskDelete(handle)</code>，删自己用 <code>vTaskDelete(NULL)</code>；动态创建的 TCB 和栈由空闲任务回收，静态的不会释放。删自己后面的代码不保证执行，清理要放在删除前；不要从外部强杀正持锁或队列的任务，资源不会自动归还，正确做法是发退出命令让任务自己释放后再删。</p>`,
+        core: `<p>xTaskCreate 的栈深度单位是字，任务函数不能返回，参数不能传局部变量地址；静态创建不依赖堆，删除后动态内存要等空闲任务回收。</p>`,
         answer: `<p><b>创建任务的核心参数：</b></p>
 <ul>
 <li><b>pxTaskCode</b>：任务函数，原型 <code>void task(void *pvParameters)</code>，<b>不能返回</b>；返回会触发 <code>prvTaskExitError</code>，通常进入断言/死循环。</li>
@@ -153,7 +153,7 @@ void worker_stop(void)
         point: "TCB 的关键字段、Cortex-M 的异常栈帧，以及任务首次运行时伪造的 xPSR/PC/LR/R0/EXC_RETURN。",
         q: `<p>面试官：FreeRTOS 创建一个任务时，明明任务还没运行过，为什么一切换过去就能从函数开头执行？它的“现场”是谁造的？</p>`,
         exam: `<p>考察对上下文切换的理解。能说清“初始化栈帧 + PendSV 恢复寄存器 + EXC_RETURN”，就说明不是只会调 API。</p>`,
-        core: `<p>TCB 关键字段：<code>pxTopOfStack</code> 保存切换出的栈顶；<code>xStateListItem</code>/<code>xEventListItem</code> 是状态链表和事件等待节点；<code>uxPriority</code>/<code>uxBasePriority</code> 当前与基础优先级（优先级继承改当前值）；<code>pxStack</code> 栈起始用于溢出检测；还有名字、参数、临界区嵌套、通知值。</p><p>首次运行现场是伪造的：<code>pxPortInitialiseStack()</code> 在栈顶摆好异常帧——xPSR = <code>0x01000000</code>（Thumb 位必须为 1，否则一跑就 HardFault）、PC 指向任务入口、LR 指向 <code>prvTaskExitError</code>、R0 放 <code>pvParameters</code>（AAPCS 第一个参数）、其余清零。EXC_RETURN 不在压栈帧里而走 LR，首次切入用 <code>0xFFFFFFFD</code>（Thread 模式、PSP、无 FPU 扩展帧）；用浮点则 <code>0xFFFFFFED</code>，额外存 S0~S15 和 FPSCR。</p><p>用 PendSV 是因为可设成最低优先级，切换不会打断高优先级中断，异常返回时硬件统一恢复现场。</p>`,
+        core: `<p>TCB 存栈顶、状态链表节点、优先级、栈起始和通知值；首次运行由 pxPortInitialiseStack 伪造异常帧，xPSR 的 Thumb 位必须为 1，PC 指向任务入口。</p>`,
         answer: `<p><b>TCB（Task Control Block）是任务的身份证，关键字段包括：</b></p>
 <ul>
 <li><b>pxTopOfStack</b>：当前栈顶，保存着任务被切换出去时的寄存器现场；上下文切换时从这里恢复。</li>
@@ -258,7 +258,7 @@ static void prvTaskExitError(void)
         point: "环形缓冲区 + 等待发送/接收链表 + 拷贝语义，以及 FromISR 版本为什么不能阻塞。",
         q: `<p>面试官：FreeRTOS 的队列不是简单的数组吧？任务往满队列里发数据会怎样？多个任务等同一个队列，醒来顺序怎么定？</p>`,
         exam: `<p>考察队列的内部结构。能说清“环形缓冲 + 两条等待链表 + 拷贝入队”，以及“唤醒最高优先级、同优先级按等待时间”，就很好。</p>`,
-        core: `<p>结构：一段连续存储区，<code>uxLength</code> 个槽、每槽 <code>uxItemSize</code> 字节；环形指针 <code>pcHead</code>/<code>pcTail</code>/<code>pcWriteTo</code>/<code>pcReadFrom</code>；<code>uxMessagesWaiting</code> 当前消息数；<code>xTasksWaitingToSend</code>/<code>xTasksWaitingToReceive</code> 两个等待链表；<code>uxQueueType</code>/<code>xMutexHolder</code> 区分队列、互斥锁和递归锁。</p><p>发送：进临界区看消息数，有空位就拷数据、移写指针、计数 +1，有任务在等接收就把最高优先级的移到就绪并触发切换；队列满且阻塞时间非 0 就把当前任务挂到 <code>xTasksWaitingToSend</code> 并设超时让出 CPU，超时返回 <code>errQUEUE_FULL</code>。接收对称：非空就拷贝、移读指针、计数 -1，并检查是否有等发送的任务。</p><p>唤醒按最高优先级，同优先级通常 FIFO，所以不能假设先等先得。队列拷贝数据本身而不是指针，局部变量出作用域数据仍有效，代价是大对象拷贝开销大；传大块应传指针并由应用保证生命周期。<code>xQueueSendFromISR</code> 不阻塞，满就返回失败，用 <code>pxHigherPriorityTaskWoken</code> 通知退出时切换。互斥锁就是长度 1、itemSize 0 的特殊队列。</p>`,
+        core: `<p>FreeRTOS 队列是环形缓冲区加两个等待链表，发送满时阻塞、接收空时阻塞，唤醒最高优先级等待任务；队列拷贝数据本身，大对象应传指针。</p>`,
         answer: `<p><b>队列的核心结构：</b></p>
 <ul>
 <li><b>存储区</b>：一块连续内存，<code>uxLength</code> 个槽，每槽 <code>uxItemSize</code> 字节。</li>
@@ -373,7 +373,7 @@ static void comm_task(void *arg)
         point: "递归锁只解决同一任务重复获取同一把锁；两把不同锁的 ABBA 死锁要靠锁顺序、超时、单锁或消息传递。",
         q: `<p>面试官：任务里先拿锁 A 再拿锁 B，另一个任务先拿 B 再拿 A，死锁了。有人说换成递归互斥锁就行，对吗？</p>`,
         exam: `<p>考察对死锁四个必要条件的理解，以及递归锁的适用边界。能明确说“递归锁不解决两把不同锁”，就说明真懂。</p>`,
-        core: `<p>不能。递归互斥锁解决“同一个任务重复获取同一把锁”，不解决“两把不同锁的交叉等待”。它的语义是同一任务可多次 <code>xSemaphoreTakeRecursive</code> 同一把锁、内部计数 +1，每取一次要 <code>xSemaphoreGiveRecursive</code> 一次，计数归零才真正释放；它允许重入，但不改变锁 A、锁 B 的获取顺序。</p><p>ABBA 死锁是任务 1 持 A 等 B、任务 2 持 B 等 A，双方都不释放、永久等待，和是不是递归锁无关。正确做法：固定锁顺序（全系统约定先 A 后 B，最简单有效）；带超时获取，拿 B 失败就释放 A 退避重试；把总一起用的锁合并成一把粗锁；缩小临界区或改成消息传递由专职任务串行处理。优先级继承和优先级天花板解决的是优先级反转，不是 ABBA 死锁。</p><p>同一任务重复取同一把锁就用递归锁，或重构代码避免重入（公共逻辑拆成“已持锁”的内部函数、外层统一加锁）。递归锁取/放次数必须严格配对，否则锁永远不释放；中断里不能用互斥锁，也不能跨任务替别人释放，层数太深说明临界区划分有问题。</p>`,
+        core: `<p>递归锁只解决同一任务重复获取同一把锁，解决不了两把锁的 ABBA 死锁；死锁要靠固定加锁顺序、超时和避免嵌套。</p>`,
         answer: `<p><b>不对。递归互斥锁解决的是“同一个任务重复获取同一把锁”，不是“两把不同锁的交叉等待”。</b></p>
 <p><b>递归锁的语义：</b>同一个任务可以多次 <code>xSemaphoreTakeRecursive</code> 同一把锁，内部计数 +1；每取一次就要 <code>xSemaphoreGiveRecursive</code> 一次，计数归零才真正释放。它允许重入，但不会改变“锁 A 和锁 B 的获取顺序”。</p>
 <p><b>ABBA 死锁：</b>任务 1 持有 A 等 B，任务 2 持有 B 等 A，双方都不释放，永久等待。这和“是不是递归锁”无关——两把锁依然是两个独立资源，交叉等待的条件没变。</p>

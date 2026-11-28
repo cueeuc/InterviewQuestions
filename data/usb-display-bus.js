@@ -52,7 +52,7 @@
         point: "考察设备接入、复位、地址分配、描述符读取的完整流程，以及控制/中断/批量/等时传输的语义差异。",
         q: `<p>面试官：一个 USB 设备插上电脑，<strong>从插入到能用，中间发生了什么？</strong>端点是什么？<strong>四种传输类型分别用在什么场合？</strong></p>`,
         exam: `<p>枚举是 USB 的“见面流程”，能按顺序说出复位、取设备描述符、分配地址、取配置描述符、设置配置，说明你看过协议而不是只会调库。四种传输类型则考察你对“带宽、延迟、可靠性”取舍的理解。</p>`,
-        core: `<p>枚举（全速）：① 接入，设备在 D+ 上拉 1.5kΩ 到 3.3V，主机检测到电平变化（低速拉 D−）；② 复位，主机等电源稳定后把 D+/D− 同时拉低（SE0）至少 10ms，设备进入默认状态、地址 0；③ 取设备描述符前 8 字节，主要是拿 <code>bMaxPacketSize0</code> 知道 EP0 一次能收多少；④ 发 SET_ADDRESS 分配地址，此后用新地址通信；⑤ 取完整设备描述符 18 字节拿 VID、PID、设备类、配置数量；⑥ 取配置描述符，先读 9 字节再按 <code>wTotalLength</code> 读完整配置（含接口、端点、类描述符）；⑦ 取字符串描述符（可选）；⑧ SET_CONFIGURATION 选定配置，设备进入已配置状态、接口和端点正式工作；⑨ 类请求，如 HID 取报告描述符、CDC 设串口参数、MSC 的 SCSI 命令。</p><p>端点是设备上的数据缓冲，方向固定（IN 设备→主机，OUT 主机→设备），EP0 是双向控制端点，其余按需配置，每个端点有自己的传输类型、包大小和轮询间隔。四种传输：控制传输 EP0 专用、枚举和类请求、保证送达；中断传输小数据有延迟上限、主机固定间隔轮询，适合 HID；批量传输大数据不保证延迟、利用空闲带宽、出错重传，适合 U 盘和虚拟串口；等时传输固定速率保证带宽但不重传，适合音视频。</p>`,
+        core: `<p>USB 枚举是设备上拉 D+、主机复位、读设备描述符、分配地址、读配置描述符、SET_CONFIGURATION，最后发类请求；EP0 是双向控制端点。</p>`,
         answer: `<p><b>枚举流程（全速设备）：</b></p>
 <ol>
 <li><b>接入</b>：设备在 D+ 上拉一个 1.5kΩ 电阻到 3.3V，主机检测到电平变化，知道有设备插入（低速设备拉的是 D−）。</li>
@@ -124,7 +124,7 @@
         point: "考察三类 USB 类的端点结构、驱动依赖、吞吐与延迟特性，以及虚拟串口在缓冲区、流控、DTR 上的坑。",
         q: `<p>面试官：<strong>CDC、HID、MSC 这三种 USB 设备有什么区别？</strong>我要做一个 USB 转串口，选哪个类？<strong>实际做的时候要注意什么？</strong></p>`,
         exam: `<p>这题考的是“按需求选类”。要免驱、数据量小，选 HID；要虚拟串口、兼容串口工具，选 CDC；要大容量存储，选 MSC。能说出各自的端点和吞吐上限，就比只会“加个 USB 库”强。</p>`,
-        core: `<p>CDC 是通信设备类，最常用 CDC-ACM，枚举出来就是虚拟串口，有两个接口：通信接口（控制/通知）和数据接口（批量 IN/OUT）；Win10 之后自带 usbser.sys 基本免驱，老系统要 INF。HID 是人机接口类，靠报告描述符描述数据格式，系统自带驱动、真正免驱，用中断端点，全速下最多 64 字节/包、间隔最小 1ms，吞吐约几十 KB/s，适合小数据低延迟控制。MSC 是大容量存储类，走批量传输、用 SCSI 命令访问扇区，枚举出来是磁盘，需要文件系统配合，吞吐高但延迟不保证。</p><p>USB 转串口选 CDC，上位机能直接用串口助手和 pyserial。注意：波特率是模拟的，CDC 会把波特率、数据位、停止位通过类请求发给设备，但设备可以完全忽略，USB 本身没有波特率概念；必须做环形缓冲和流控，串口侧来不及处理时用 SET_CONTROL_LINE_STATE 或自定义协议通知上位机暂停；DTR/RTS 很多板子用来做复位和 Boot 选择，类请求里要正确映射，否则烧录工具连不上；VID/PID 要固定、描述符要合法，Windows 会缓存驱动绑定；USB 转出来是 TTL 串口，接 RS232 还要电平转换。</p>`,
+        core: `<p>CDC-ACM 枚举成虚拟串口、Win10 免驱；HID 靠报告描述符、真正免驱但吞吐低；MSC 枚举成磁盘、走 SCSI 和批量传输。</p>`,
         answer: `<p><b>三类的定位：</b></p>
 <ul>
 <li><b>CDC（Communication Device Class）</b>：通信设备类，最常用的是 CDC-ACM（抽象控制模型），枚举出来就是一个虚拟串口。它有两个接口：一个通信接口（控制/通知），一个数据接口（批量 IN/OUT）。Windows 10 之后自带 <code>usbser.sys</code>，基本免驱；老系统需要 INF。</li>
@@ -227,7 +227,7 @@ void cdc_bridge_poll(void)
         point: "考察显示驱动、tick、输入、内存四要素，flush 回调与 DMA 的配合，以及局部缓冲/双缓冲的取舍。",
         q: `<p>面试官：在一块 SPI 屏上移植 LVGL，<strong>要做哪几件事？</strong>它的刷新是怎么触发的？<strong>脏矩形和双缓冲怎么配？</strong></p>`,
         exam: `<p>移植本身不难，难在“刷得动、不撕裂、不卡”。能说清 <code>flush_cb</code> 什么时候调、<code>lv_display_flush_ready</code> 什么时候回、缓冲区开多大，说明你真的调过性能。</p>`,
-        core: `<p>四件事：显示，创建 display 对象、设分辨率和颜色格式、注册 <code>flush_cb</code>；心跳，SysTick 里调 <code>lv_tick_inc(1)</code> 或注册 tick 回调；输入，注册 indev 的 <code>read_cb</code> 读触摸/按键；内存，配 <code>LV_MEM_SIZE</code> 或接自己的 malloc/free，对象、样式、动画都从这里分配。</p><p>刷新机制：界面变化时 LVGL 把失效区域标记为“脏”，在 <code>lv_timer_handler()</code> 里合并脏矩形、重绘这块到缓冲，再调 flush_cb 送到屏，是按需刷新 + 区域合并，不是每帧全屏重画。脏矩形由每个被改控件把自己的区域加进失效列表、LVGL 合并重叠区域，所以“只改一个数字”只刷那一小块。</p><p>缓冲区三种：单缓冲 + 局部，开屏幕的 1/10 按行分块刷，RAM 最省但刷新次数多；双缓冲 + 局部，一块 DMA 发送时另一块继续渲染，CPU 和 DMA 并行，最常用；全屏缓冲，320×240×2B 约 150KB，一次刷完，适合有外部 SRAM/SDRAM。关键点：用 DMA 时 flush_cb 启动后必须立刻返回，在 DMA 完成中断里再调 <code>lv_display_flush_ready</code>，死等会让双缓冲失去意义。</p>`,
+        core: `<p>LVGL 要初始化 display、tick、input 和内存，flush_cb 把渲染结果送屏；脏矩形只重绘变化区域，DMA 时 flush_cb 启动后要立刻返回。</p>`,
         answer: `<p><b>移植四件事：</b></p>
 <ol>
 <li><b>显示</b>：创建 display 对象，设置分辨率、颜色格式，注册 <code>flush_cb</code>；在回调里把一块像素写到屏上。</li>
@@ -337,7 +337,7 @@ void lvgl_port_init(void)
         point: "考察扫描输出与 CPU 写入的竞争、TE/VSYNC 同步、双缓冲交换时机，以及 LTDC 的影子寄存器。",
         q: `<p>面试官：界面上快速移动的方块，边缘总有一条“错位”的横线，<strong>这是什么原因？</strong>双缓冲为什么能解决？<strong>交换缓冲区应该在什么时刻做？</strong></p>`,
         exam: `<p>撕裂是“写”和“扫”不同步的经典问题。能说清 LCD 是一行行扫描输出的、CPU 在写另一块内存，以及交换必须等 vblank，就理解了显示时序。</p>`,
-        core: `<p>成因：LCD 控制器逐行扫描把 framebuffer 送到屏上，一帧 16.7ms（60Hz）；如果 CPU 在控制器扫到一半时改了同一块 framebuffer，上半屏是旧内容、下半屏是新内容，中间就出现一条错位横线。</p><p>单缓冲必然撕裂：只有一块显存，CPU 写和控制器读并发，没有任何同步，只要写入发生在扫描期间就可能撕。双缓冲做法：准备两块 framebuffer，CPU 只写后台缓冲，控制器始终读前台缓冲，一帧画完在垂直消隐期（vblank）交换指针，控制器下一帧从头读新缓冲，任何一帧都是完整的。</p><p>交换时机很关键，必须在 vblank 或 TE 信号到来时交换：提前交换控制器可能已扫到一半照样撕，太晚会丢帧。LTDC 用影子寄存器实现，写 <code>LTDC-&gt;SRCR</code> 的 VBR 位，硬件在下一个 vblank 才让新地址寄存器生效，软件不用忙等。代价是显存翻倍，320×240×2B 两块约 300KB，内部 SRAM 放不下通常要外部 SRAM/SDRAM。</p>`,
+        core: `<p>单缓冲时 CPU 写和 LCD 控制器读同一块显存会撕裂；双缓冲在 vblank 交换前台缓冲，LTDC 用 VBR 影子寄存器在下一帧生效。</p>`,
         answer: `<p><b>撕裂（tearing）的成因：</b>LCD 控制器是<b>逐行扫描</b>把 framebuffer 送到屏上的，一帧 16.7ms（60Hz）。如果 CPU 在控制器扫描到一半时修改了同一块 framebuffer，屏幕上半部分显示的是旧内容、下半部分是新内容，中间就出现一条错位的横线。</p>
 <p><b>单缓冲为什么必然撕裂：</b>只有一块显存，CPU 写和控制器读是并发的，没有任何同步机制，只要写入发生在扫描期间就可能撕。</p>
 <p><b>双缓冲怎么解决：</b>准备两块 framebuffer，CPU 只写“后台缓冲”，控制器始终读“前台缓冲”。一帧画完后，在<b>垂直消隐期（vblank）</b>把前台/后台指针交换，控制器下一帧从头开始读新缓冲，这样任何一帧都是完整的。</p>
@@ -424,7 +424,7 @@ void lcd_vblank_isr(void)
         point: "考察地址/数据建立保持时间与 HCLK 周期的换算、SRAM 模式选择，以及 8080 屏 RS 接地址线的地址映射。",
         q: `<p>面试官：用 FMC 挂一颗 55ns 的 SRAM，HCLK 是 168MHz，<strong>ADDSET 和 DATAST 怎么算？</strong>如果换成 8080 并口屏，RS 接 A0，<strong>命令和数据的地址分别是多少？</strong></p>`,
         exam: `<p>这题考的是“把手册的纳秒换成控制器的时钟周期”。会算 <code>(ADDSET+1)+(DATAST+1)</code>，知道要留裕量，再能推出 RS 地址，就说明你独立配过 FMC。</p>`,
-        core: `<p>先算 HCLK 周期：168MHz 约 5.95ns。FMC SRAM 模式一个读周期是 <code>(ADDSET+1)+(DATAST+1)</code> 个 HCLK；SRAM 访问 55ns 需 55/5.95≈9.24 向上取 10 个周期（59.5ns），留裕量取 11~12。<code>ADDSET=0、DATAST=8</code> 是 10 周期；<code>ADDSET=1、DATAST=8</code> 是 11 周期更稳。写时序同理，读快写慢的器件要开 Extended Mode 分开配。</p><p>8080 屏借 FMC SRAM 时序：CS→NE1（基地址 0x60000000）、RS/DC→A0、WR→NWE、RD→NOE、D0~D15→FMC 数据线。注意 FMC 按半字编址，16 位总线上 A0 对应 bit1：所以命令地址 0x60000000（A0=0）、数据地址 0x60000002（A0=1）。写命令 <code>*(volatile uint16_t *)0x60000000 = cmd;</code>、写数据 <code>*(volatile uint16_t *)0x60000002 = data;</code>，实际偏移要按屏的接法推，不能照抄别人的板子。</p>`,
+        core: `<p>FMC SRAM 读周期 = (ADDSET+1)+(DATAST+1) 个 HCLK，55ns 约 10 个周期；8080 屏 RS 接 A0 时命令地址 0x60000000、数据地址 0x60000002。</p>`,
         answer: `<p><b>先算一个 HCLK 周期：</b>168MHz → <code>1/168MHz ≈ 5.95ns</code>。</p>
 <p><b>SRAM 读时序：</b>FMC 的 SRAM 模式（Mode 1）一个读周期由“地址建立 + 数据保持”组成，实际周期数是：</p>
 <p><code>t_cycle = (ADDSET + 1) + (DATAST + 1) 个 HCLK</code></p>
@@ -533,7 +533,7 @@ static void fmc_sram_init(void)
         point: "考察 SD 卡初始化命令序列、块读写与 diskio 对接，以及插拔检测、去抖、卸载重挂的完整流程。",
         q: `<p>面试官：用 SDIO 接一张 SD 卡，跑 FatFs 存日志。<strong>从上电到能读写文件，要经过哪些步骤？</strong>卡拔了再插，<strong>软件怎么处理？</strong></p>`,
         exam: `<p>这题分两段：初始化命令序列考协议熟悉度，热插拔考工程完整性。能说出 CMD0/CMD8/ACMD41/CMD2/CMD3/CMD7 的顺序，以及“先卸载再重新初始化”，就说明你做过产品级存储。</p>`,
-        core: `<p>初始化顺序：上电给 SDIO 时钟至少 74 个周期；CMD0 复位到 idle；CMD8 查电压（返回 0x1AA 表示 2.0 以上）；ACMD41 带 HCS 循环发到卡退出 busy（可能几百毫秒到几秒）；CMD2 取 CID；CMD3 取 RCA，之后用它通信；CMD9 取 CSD；CMD7 选卡；ACMD6 设 4 位总线、CMD16 设块长 512；之后 CMD17/18 读、CMD24/25 写。</p><p>对接 FatFs：实现 <code>disk_initialize</code>、<code>disk_status</code>、<code>disk_read</code>、<code>disk_write</code>、<code>disk_ioctl</code>，扇区固定 512 字节，多块用 CMD18/25 效率最高；再 <code>f_mount</code> 挂载，失败就 <code>f_mkfs</code> 格式化。</p><p>热插拔：CD 引脚接 GPIO 中断，中断只置标志，去抖 100~500ms 后在任务里处理；插入重新初始化并 <code>f_mount</code>，拔出先 <code>f_mount(NULL,...)</code> 卸载再 <code>HAL_SD_DeInit</code>，避免缓存指向已移除的卡；写返回错误也按“卡可能被拔”处理。不要写卡途中拔卡，可能损坏 FAT，产品上做写入指示或换日志式文件系统。</p>`,
+        core: `<p>SD 卡初始化是 CMD0→CMD8→ACMD41→CMD2→CMD3→CMD9→CMD7→ACMD6→CMD16；FatFs 要实现 disk_read/write/ioctl，热插拔用 CD 引脚加去抖。</p>`,
         answer: `<p><b>初始化流程（SD 卡）：</b></p>
 <ol>
 <li>上电，给 SDIO 时钟至少 74 个周期，让卡进入就绪。</li>
@@ -657,7 +657,7 @@ int storage_task(void)
         point: "考察 LwIP 的内存模型（堆/pbuf 池/PCB）、TCP 窗口与缓冲的关系，以及 raw API 与 socket/netconn 的适用场景。",
         q: `<p>面试官：STM32 + 以太网 + LwIP，<strong>内存池怎么配才不丢包？</strong><code>NO_SYS</code> 开和不开有什么区别？<strong>socket API 和裸机回调该怎么选？</strong></p>`,
         exam: `<p>LwIP 调优的核心是“缓冲区要能装下一个往返的数据量”。能说出 <code>PBUF_POOL_SIZE</code>、<code>TCP_SND_BUF</code>、<code>TCP_WND</code> 三者的关系，并知道 raw API 不能阻塞，就算答到点上了。</p>`,
-        core: `<p>四块内存：<code>MEM_SIZE</code> 是 LwIP 自己的堆，放协议控制块和动态分配；<code>PBUF_POOL_SIZE</code> × <code>PBUF_POOL_BUFSIZE</code> 是 pbuf 池，收包先从这里拿，池空就丢包；<code>MEMP_NUM_*</code> 限制各类 PCB 数量；<code>TCP_SND_BUF</code>/<code>TCP_WND</code> 是发送缓冲和接收窗口，直接决定吞吐。</p><p>配法：按带宽延迟积算，100Mbps、RTT 1ms 一个往返约 12.5KB，TCP_WND 至少这个量级、SND_BUF 不低于窗口，否则一直等 ACK 跑不满；pbuf 池按“能同时缓存多少包”估，16~32 个是常见起点。</p><p><code>NO_SYS=1</code> 裸机在主循环轮询 <code>sys_check_timeouts</code>、用 raw API 回调，零拷贝开销小，但回调必须快速返回、不能阻塞，否则协议栈停摆；<code>NO_SYS=0</code> 由 <code>tcpip_thread</code> 跑协议栈，可用 netconn/socket、能阻塞，代价是多一层线程通信和拷贝，且只有 tcpip 线程能碰核心。资源紧用 raw API，已有 RTOS、要移植 socket 代码再用 socket。</p>`,
+        core: `<p>LwIP 的 MEM_SIZE 是协议栈堆、PBUF_POOL 是收包池、TCP_WND/SND_BUF 决定吞吐；NO_SYS=1 用 raw API 零拷贝但不能阻塞，NO_SYS=0 跑 tcpip_thread 可用 socket。</p>`,
         answer: `<p><b>先理解 LwIP 的几块内存：</b></p>
 <ul>
 <li><code>MEM_SIZE</code>：LwIP 自己的堆，用于协议控制块、路由表、各种动态分配。</li>
@@ -762,7 +762,7 @@ int storage_task(void)
         point: "多 screen 与容器切换的取舍、缓冲大小与分辨率的换算关系，以及帧率到底受什么限制。",
         q: `<p>面试官：你的 LVGL 项目有多少个页面？怎么组织的？分辨率、缓冲和刷新周期是怎么定的？</p>`,
         exam: `<p>考察是否有真实的 GUI 项目经验。能算清“缓冲要多少 RAM、帧率被什么卡住”，比报一堆数字更可信。</p>`,
-        core: `<p>两种做法：多 screen + 切换动画，每个页面是独立 screen，用 <code>lv_screen_load_anim</code> 切换、自带转场，缺点是每个 screen 对象树独立占内存，页面多了 RAM 吃不消；单 screen + 容器显隐，一个 screen 里放多个容器，切换只改显隐，省内存、切换快、无动画开销，适合页面多但交互简单的设备。我的做法是主干用容器显隐，只有需要转场效果的少数页面用独立 screen；列表项不要每次创建删除，用 <code>lv_obj_clean</code> 复用容器，否则反复分配释放会产生碎片。</p><p>分辨率先由屏定、再由 RAM 反推缓冲：320×240 全屏 RGB565 要 150KB，800×480 要 750KB，后者多数 MCU 必须外扩 SRAM/SDRAM；局部缓冲只要屏的 1/10，320×240 约 15KB，是绝大多数方案的选择。</p><p>刷新周期不是帧率：<code>lv_timer_handler</code> 每 5~10ms 调一次是在处理定时器和检查脏区，真正画多少帧取决于 SPI 带宽；SPI 40MHz 理论 5MB/s，刷 320×240×16bpp 整屏约 150KB，纯传输约 31ms，算上命令、CS 和刷新开销约 35~40ms，满打满算 25~30fps，所以必须靠局部刷新只传变化区域。静态为主、偶尔动画 20~30fps 够用，滑动列表、进度条才需要往 60fps 追。</p>`,
+        core: `<p>页面多用容器显隐省 RAM，少数需要转场的页面用独立 screen；缓冲按屏的 1/10 做局部刷新，SPI 40MHz 全屏 320×240 约 31ms，实际靠脏矩形。</p>`,
         answer: `<p><b>页面组织两种做法：</b></p>
 <ul>
 <li><b>多 screen + 切换动画</b>：每个页面是一个独立的 screen，用 <code>lv_screen_load_anim</code> 切换，自带转场效果。缺点是每个 screen 的对象树都独立占内存，页面多了 RAM 吃不消。</li>
@@ -845,7 +845,7 @@ void gui_task(void *arg)
         point: "三种布局方式的适用场景、尺寸用百分比而非像素，以及样式统一管理的做法。",
         q: `<p>面试官：LVGL 里控件位置你怎么定？为什么很多项目改个分辨率界面就全乱了？</p>`,
         exam: `<p>考察界面工程化的意识。能说出“别用绝对坐标、尺寸用百分比、样式抽公共”这三点，就说明踩过坑。</p>`,
-        core: `<p>绝对定位 <code>lv_obj_set_pos</code> + <code>set_size</code> 写死像素坐标和大小，简单直接但换分辨率、换字体就全乱，只适合单一定制屏的简单界面；flex（<code>lv_obj_set_flex_flow</code> + <code>flex_align</code>）是一维排列，可按行或列、支持 gap 和 grow 分配剩余空间，适合工具栏、卡片列表、按钮组，最常用；grid（<code>lv_obj_set_grid_dsc_array</code> + <code>set_grid_cell</code>）是二维栅格，用 fr 或像素定义行列，适合仪表盘、设置页这类规整二维布局。还有轻量的 <code>lv_obj_align</code> 相对父对象对齐、<code>lv_obj_align_to</code> 相对兄弟对象对齐，适合界面上只有几个元素、不参与流式布局的场合。</p><p>两条原则：尺寸尽量用 <code>lv_pct(100)</code> 或 <code>LV_SIZE_CONTENT</code>，不要写死像素；padding 和 gap 统一放 style 里而不是每个控件单独设，否则改一次间距要改几十处。我的倾向是外层 flex 分行、每行内部再 flex，只有真正二维的仪表盘页面才用 grid，绝对坐标只在少数装饰元素上用。</p>`,
+        core: `<p>绝对定位写死像素只适合单一定制屏；flex 做一维排列、grid 做二维布局，尺寸尽量用百分比或 LV_SIZE_CONTENT，间距统一放 style。</p>`,
         answer: `<p><b>三种方式，按场景选：</b></p>
 <ul>
 <li><b>绝对定位</b>（<code>lv_obj_set_pos</code> + <code>set_size</code>）：写死像素坐标和大小。简单直接，但换分辨率、换字体就全乱，只适合单一定制屏的简单界面。</li>
@@ -927,7 +927,7 @@ static void build_layout(lv_obj_t *parent)
         point: "把“GUI 卡”与“系统卡”分开、按调用链逐段排除，以及内存耗尽和线程安全这两类典型原因。",
         q: `<p>面试官：设备用着用着界面就不刷新了，按钮也点不动，但程序好像还在跑。你怎么查？</p>`,
         exam: `<p>考察排查思路的条理性。能先分清是“没调用刷新”还是“调用了但刷不出来”，再逐段收敛，就比乱猜强。</p>`,
-        core: `<p>① 分清是 GUI 卡还是整个系统卡：GUI 任务里翻转 GPIO 或递增计数器，用示波器/日志看还在不在动。不动是系统级问题——死循环、死锁、中断风暴、HardFault 后卡在异常处理，按常规调试查；还在动就是 GUI 层问题。</p><p>② 看 <code>lv_timer_handler</code> 是否正常返回：在它前后打点计时，单次耗时很长说明内部有阻塞——flush_cb 里死等 DMA、驱动里阻塞式读触摸、某个回调里做耗时运算。</p><p>③ 看内存：调 <code>lv_mem_monitor</code> 打印 used_pct 和 frag_pct，used 接近 100% 说明内存耗尽，对象创建会静默失败，表现就是“界面部分不显示、点了没反应”，常见原因是页面反复创建不删除或 LV_MEM_SIZE 设太小。</p><p>④ 看线程安全：有没有在中断或另一个任务里直接调 LVGL API？LVGL 不是线程安全的，跨上下文必须用 <code>lv_async_call</code> 或加互斥锁，这类问题表现为偶发花屏、卡死，且和操作时序强相关。⑤ 看输入：触摸驱动出错会一直上报“按下”，事件队列被刷爆，界面看着像卡住，打印坐标和状态就能发现。</p>`,
+        core: `<p>先分清是 GUI 卡还是系统卡：GUI 任务打点看还动不动；再看 lv_timer_handler 是否阻塞、内存 used/frag、跨线程调用和触摸一直按下。</p>`,
         answer: `<p><b>第一步：分清是 GUI 卡还是整个系统卡。</b>在 GUI 任务里翻转一个 GPIO 或递增计数器，用示波器/日志看它还在不在动。</p>
 <ul>
 <li>不动 → 系统级问题：死循环、死锁、中断风暴、HardFault 后卡在异常处理。按常规调试手段查。</li>
