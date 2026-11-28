@@ -268,9 +268,9 @@ uint32_t stack_high_water(const uint32_t *stack_low, uint32_t words)
         point: "压栈顺序、向量取址、EXC_RETURN 编码与尾链，是理解 RTOS 切换的关键。",
         q: `<p>面试官：Cortex-M 响应中断时，<strong>硬件自动做了哪些事？</strong>压栈压了哪几个寄存器？EXC_RETURN 里存的是什么？为什么说它让 RTOS 的上下文切换变得很轻量？</p>`,
         exam: `<p>这是内核机制的深水区。能说清“8 个寄存器自动压栈”“LR 存 EXC_RETURN 编码返回行为”“PendSV 里手动保存 R4-R11”，基本可以判断你写过或读过 RTOS 移植层。</p>`,
-        core: `<p>硬件压 8 个寄存器（R0-R3、R12、LR、PC、xPSR）到当前栈，从向量表取处理函数地址装入 PC，把 LR 设为 <code>EXC_RETURN</code>，更新 IPSR。</p><p><code>EXC_RETURN</code> 是高 24 位全 1 的特殊值：bit2 选返回后用 PSP 还是 MSP，bit3 表示线程/处理模式，bit4 表示是否恢复浮点现场；例如 <code>0xFFFFFFFD</code> 是返回线程模式、用 PSP。执行 <code>BX LR</code> 时硬件识别它自动出栈，所以 RTOS 在 PendSV 里只需手工保存/恢复 R4-R11。</p>`,
+        core: `<p>硬件压 8 个寄存器（R0-R3、R12、LR、PC、xPSR）到当前栈，从向量表取处理函数地址装入 PC，把 LR 设为 <code>EXC_RETURN</code>，更新 IPSR。</p><p><code>EXC_RETURN</code> 是高 24 位全 1 的特殊值：bit2 选返回后用 PSP 还是 MSP，bit3 表示返回线程还是处理模式，bit4 是帧类型——<strong>0 表示扩展帧，出栈时额外恢复 S0-S15、FPSCR 等浮点现场；1 表示基本帧，不恢复浮点</strong>；例如 <code>0xFFFFFFFD</code> 是基本帧、返回线程模式、用 PSP，带浮点现场时是 <code>0xFFFFFFED</code>。执行 <code>BX LR</code> 时硬件识别它自动出栈，所以 RTOS 在 PendSV 里只需手工保存/恢复 R4-R11，有 FPU 时再保存 S16-S31。</p>`,
         answer: `<p>硬件自动做四件事：第一，把 R0-R3、R12、LR、PC、xPSR 这 8 个寄存器压入当前栈（线程模式用 PSP，处理模式用 MSP）；第二，从向量表取出异常处理函数的地址装入 PC；第三，把 LR 设置为 EXC_RETURN 特殊值；第四，更新 IPSR 为当前异常号。</p>
-<p>EXC_RETURN 是一个高 24 位全 1 的特殊值，低几位编码了返回信息：bit2 表示返回后用什么栈（1 用 PSP，0 用 MSP），bit3 表示返回后是线程模式还是处理模式，bit4 表示是否恢复浮点现场。比如 0xFFFFFFF9 表示返回线程模式、用 MSP；0xFFFFFFFD 表示返回线程模式、用 PSP。</p>
+<p>EXC_RETURN 是一个高 24 位全 1 的特殊值，低几位编码了返回信息：bit2 表示返回后用什么栈（1 用 PSP，0 用 MSP），bit3 表示返回后是线程模式还是处理模式，bit4 是帧类型：0 表示扩展帧，出栈时会额外恢复 S0-S15、FPSCR 等浮点现场；1 表示基本帧，不恢复浮点。比如 0xFFFFFFF9 是基本帧、返回线程模式、用 MSP；0xFFFFFFFD 是基本帧、返回线程模式、用 PSP；0xFFFFFFED 是扩展帧、返回线程模式、用 PSP。</p>
 <p>返回时执行 <code>BX LR</code>，硬件识别到这个特殊值就自动出栈，恢复 8 个寄存器，回到被中断处。整个过程不需要软件写一行汇编。</p>
 <p>正因为硬件包办了这些，RTOS 的上下文切换才轻量：PendSV 里只需要手动保存/恢复 R4-R11（调用者保存之外的寄存器），再加上切换 PSP，就完成了任务切换。</p>`,
         principle: `<p>压栈顺序是固定的：先压 xPSR、PC、LR、R12、R3、R2、R1、R0（地址从高到低），这样出栈后正好恢复。理解这个顺序对调试 HardFault 很重要——从栈帧里按固定偏移就能取出出错时的 PC。</p>

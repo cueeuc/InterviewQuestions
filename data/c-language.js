@@ -839,7 +839,7 @@ void USART1_IRQHandler(void)
         point: "置位、清位、取反、读位的标准写法，以及读-改-写竞态与 1<<31 的未定义行为。",
         q: `<p>面试官：<strong>怎么把寄存器的第 3 位置 1、清 0、翻转？</strong>如果要同时操作多个位呢？写寄存器时要注意什么？</p>`,
         exam: `<p>这是嵌入式最基础的动手能力。除了语法，面试官会追问“读-改-写是否原子”“为什么用 BSRR”“1&lt;&lt;31 有什么问题”，这些才是真实项目里踩过的坑。</p>`,
-        core: `<p>置位 <code>reg |= (1U&lt;n)</code>，清零 <code>reg &amp;= ~(1U&lt;n)</code>，翻转 <code>reg ^= (1U&lt;n)</code>，读位 <code>(reg&gt;&gt;n)&amp;1U</code>；多位先清后或：<code>reg = (reg &amp; ~MASK) | (val &lt;&lt; shift)</code>。</p><p>三个坑：常量带 <code>U</code>，<code>1&lt;&lt;31</code> 是有符号左移；读改写不是原子操作，中断也改同一寄存器要用 BSRR 或关中断；外设寄存器必须经 <code>volatile</code> 指针访问。</p>`,
+        core: `<p>置位 <code>reg |= (1U&lt;&lt;n)</code>，清零 <code>reg &amp;= ~(1U&lt;&lt;n)</code>，翻转 <code>reg ^= (1U&lt;&lt;n)</code>，读位 <code>(reg&gt;&gt;n)&amp;1U</code>；多位先清后或：<code>reg = (reg &amp; ~MASK) | (val &lt;&lt; shift)</code>。</p><p>三个坑：常量带 <code>U</code>，<code>1&lt;&lt;31</code> 是有符号左移；读改写不是原子操作，中断也改同一寄存器要用 BSRR 或关中断；外设寄存器必须经 <code>volatile</code> 指针访问。</p>`,
         answer: `<p>标准写法是四个：置位用 <code>reg |= (1U &lt;&lt; n)</code>；清零用 <code>reg &amp;= ~(1U &lt;&lt; n)</code>；翻转用 <code>reg ^= (1U &lt;&lt; n)</code>；读某一位用 <code>(reg &gt;&gt; n) &amp; 1U</code>。</p>
 <p>多位操作用掩码：先清掉目标位再或上新值，也就是 <code>reg = (reg &amp; ~MASK) | (val &lt;&lt; shift)</code>，这个模式叫 read-modify-write。</p>
 <p>要注意三点：第一，常量一定要带 <code>U</code>，<code>1 &lt;&lt; 31</code> 是有符号左移，属于未定义行为；第二，读-改-写不是原子操作，如果中断里也在改同一个寄存器，会丢更新，这种情况要用硬件提供的原子置位寄存器（比如 STM32 的 BSRR）或者关中断；第三，外设寄存器必须通过 volatile 指针访问，否则编译器可能把多次写合并。</p>`,
