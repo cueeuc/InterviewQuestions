@@ -60,7 +60,7 @@
         point: "考察 socket/bind/listen/accept/read/write/close 的调用顺序、backlog 与 SO_REUSEADDR，以及非阻塞下的 EAGAIN 和半包处理。",
         q: `<p>面试官：写一个 TCP server，<strong>从创建到收发数据的完整调用顺序是什么？</strong>阻塞和非阻塞的区别在哪？<strong>非阻塞下 read 返回 0 和 -1 分别代表什么？</strong></p>`,
         exam: `<p>这题是 Linux 应用岗的入门必问。能说清 listen 的 backlog、accept 返回新 fd、非阻塞要处理 EAGAIN 和半包，说明你写过真实的服务端，而不是只跑过 demo。</p>`,
-        core: `<p>TCP 服务端 socket→bind→listen→accept→read/write；accept 返回新 fd，read 返回 0 是对端关闭，非阻塞下 EAGAIN 表示暂时没数据。</p>`,
+        core: `<p>TCP 服务端 socket→bind→listen→accept→read/write；accept 返回新 fd，read 返回 0 是对端关闭，返回 -1 且 errno=EAGAIN 表示暂时没数据，其他 errno 才是错误。</p>`,
         answer: `<p><b>完整流程：</b></p>
 <ol>
 <li><code>socket(AF_INET, SOCK_STREAM, 0)</code> 创建监听套接字；</li>
@@ -431,7 +431,7 @@ int get(void)
         point: "考察 fork 的返回值与写时复制、僵尸/孤儿进程、daemon 的双 fork 步骤，以及 async-signal-safe 约束。",
         q: `<p>面试官：<strong>fork 之后父子进程发生了什么？</strong>守护进程怎么创建？<strong>信号处理函数里为什么不能随便调 printf？</strong></p>`,
         exam: `<p>这题覆盖进程模型的三块：fork 的语义、daemon 的标准步骤、信号的异步安全。能说出“双 fork + setsid + 重定向 fd”和“信号处理里只能调 async-signal-safe 函数”，就很完整。</p>`,
-        core: `<p>fork 返回两次，父进程得子 PID、子进程得 0，子进程用写时复制共享内存；子进程退出父进程要 wait，守护进程要 fork、setsid、再 fork、重定向标准 IO。</p>`,
+        core: `<p>fork 返回两次，父进程得子 PID、子进程得 0，子进程用写时复制共享内存；守护进程要 fork、setsid、再 fork、重定向标准 IO。信号处理函数里不能随便 printf，因为它不是异步信号安全的、可能死锁，要用 write 或设标志。</p>`,
         answer: `<p><b>fork 的语义：</b>调用一次，返回两次。父进程拿到子进程 PID（<code>&gt;0</code>），子进程拿到 <code>0</code>，失败返回 <code>-1</code>。子进程获得父进程地址空间的<b>副本</b>，但 Linux 用写时复制（COW）：只读共享物理页，任一进程写入时才复制，所以 fork 很快、内存也不会立刻翻倍。</p>
 <p>子进程继承父进程的 fd、信号处理方式、环境变量；但<b>不继承</b>父进程的线程（多线程程序 fork 后只有调用线程存活）、锁状态、定时器。</p>
 <p><b>僵尸与孤儿：</b>子进程先退出、父进程没 <code>wait</code>，子进程变成僵尸（Z），占着 PID 和退出状态；父进程先退出，子进程被 init/systemd 收养，成为孤儿。所以父进程必须 <code>waitpid</code>，或者用 <code>SIGCHLD</code> 处理。</p>
@@ -709,7 +709,7 @@ file app_static_musl                       # 应显示 statically linked`
         point: "考察握手/挥手的报文与状态、TIME_WAIT 的两个作用、窗口与拥塞控制的区别，以及常见异常状态。",
         q: `<p>面试官：<strong>为什么握手是三次、挥手是四次？</strong>TIME_WAIT 为什么要等 2MSL？<strong>滑动窗口解决什么问题？</strong></p>`,
         exam: `<p>这题是网络基础的分水岭。能说清“三次是为了双方都确认收发能力”“四次是因为半关闭”“TIME_WAIT 是为了最后一个 ACK 能重传、并让旧报文消散”，就答到本质了。</p>`,
-        core: `<p>TCP 三次握手确认双方收发能力并同步序号，四次挥手因为全双工要分别关闭；TIME_WAIT 等 2MSL 是为了重发最后的 ACK 并让旧报文消散。</p>`,
+        core: `<p>TCP 三次握手确认双方收发能力并同步序号，四次挥手因为全双工要分别关闭；TIME_WAIT 等 2MSL 是为了重发最后的 ACK 并让旧报文消散。滑动窗口做流量控制，允许未确认数据在途，提高吞吐。</p>`,
         answer: `<p><b>三次握手：</b></p>
 <ol>
 <li>客户端发 <code>SYN</code>（带初始序号 seq=x），进入 <code>SYN_SENT</code>；</li>

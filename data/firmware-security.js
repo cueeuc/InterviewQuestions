@@ -141,7 +141,7 @@ int image_verify(const img_hdr_t *h, const uint8_t *payload,
         point: "考察 RDP 各级别的实际行为、调试口禁用的边界、UID 绑定的作用与绕过方式，以及威胁模型思维。",
         q: `<p>面试官：老板说“固件不能被抄”。<strong>读保护、关调试口、UID 绑定，这三个分别能防什么？</strong>能防住专业破解吗？</p>`,
         exam: `<p>这题最忌讳“开了 RDP 就安全了”。面试官想听的是分级：L1 能挡什么、L2 为什么不可逆、UID 绑定为什么只能防“直接复制 hex”，以及专业攻击者会怎么绕。</p>`,
-        core: `<p>STM32 RDP L1 禁止调试器读 Flash 但可擦除回退，L2 永久禁用调试、不可逆；再配合 UID 绑定和 Secure Boot 提高破解成本。</p>`,
+        core: `<p>STM32 RDP L1 禁止调试器读 Flash 但可擦除回退，L2 永久禁用调试、不可逆；再配合 UID 绑定和 Secure Boot 提高破解成本。这些都只是提高门槛，挡不住开盖、侧信道和故障注入等专业手段。</p>`,
         answer: `<p><b>1. 读保护（RDP）：</b>以 STM32 为例分三级。</p>
 <ul>
 <li><b>L0</b>：无保护，调试器可读 Flash、可 attach。</li>

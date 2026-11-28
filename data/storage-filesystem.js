@@ -301,7 +301,7 @@ int ee_read(uint16_t id, void *buf, uint16_t *len)
         point: "考察三者的设计目标、掉电一致性机制、目录与磨损均衡能力，以及和介质（SD / NOR / NAND）的匹配。",
         q: `<p>面试官：MCU 上要做一个能存日志、能升级、还要跟 PC 交换文件的存储方案，<strong>FatFs、LittleFS、SPIFFS 你怎么选？</strong>它们掉电时分别怎么保证不丢数据？</p>`,
         exam: `<p>这题的关键是“介质 + 使用场景”决定选型，而不是哪个更流行。能说清 FatFs 兼容性好但没有日志、LittleFS 是 copy-on-write 且抗掉电、SPIFFS 是日志式但已不活跃，就说明你调研过。</p>`,
-        core: `<p>要跟 PC 交换文件用 FatFs；片内或 SPI NOR 要掉电安全和磨损均衡用 LittleFS；SPIFFS 已停止维护，新项目不建议用。</p>`,
+        core: `<p>要跟 PC 交换文件用 FatFs；片内或 SPI NOR 要掉电安全和磨损均衡用 LittleFS；SPIFFS 已停止维护，新项目不建议用。FatFs 靠 f_sync 和重挂载，LittleFS 用日志和 CRC 保证原子提交。</p>`,
         answer: `<p><b>先说结论：</b>要跟 PC 交换文件（SD 卡、U 盘）用 <b>FatFs</b>；片内/外部 NOR、要求掉电安全和磨损均衡用 <b>LittleFS</b>；SPIFFS 只适合老项目维护，新项目优先 LittleFS。</p>
 <p><b>FatFs：</b>实现 FAT12/16/32/exFAT，兼容性最好，PC 插上就能读。但它<b>没有日志</b>：更新一个文件要改 FAT 表、目录项、数据区，掉电发生在中间就可能出现“文件长度对但内容错”“目录项指向已释放的簇”等问题。它提供 <code>f_sync</code> 强制刷盘，但不能保证多步更新的原子性。适合“能接受偶尔丢文件、要 PC 兼容”的场景。</p>
 <p><b>LittleFS：</b>专为微控制器和 NOR/NAND 设计。核心是 <b>copy-on-write + 元数据对（metadata pair）</b>：元数据有两份，更新时写新的一份并校验，成功后才切换；文件数据用 CTZ 跳表组织，追加写不破坏旧数据。掉电时要么看到旧版本、要么看到新版本，不会看到中间状态。它自带磨损均衡和坏块感知，适合片内 Flash 和 SPI NOR。</p>

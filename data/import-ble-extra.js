@@ -362,7 +362,7 @@ void on_service_discovered(uint16_t conn_handle, uint16_t val_handle)
         point: "37/38/39 三个广播信道、31 字节广播数据与 scan response、主动/被动扫描，以及连接请求的建立。",
         q: `<p>面试官：BLE 设备是怎么被手机发现的？广播包里到底能放多少数据？主动扫描和被动扫描有什么区别？</p>`,
         exam: `<p>考察对 BLE 发现流程的理解。能说清“3 个广播信道、31 字节、scan response 再加 31 字节、CONNECT_IND 建连”，就很好。</p>`,
-        core: `<p>BLE 外围设备在 37/38/39 三个信道周期广播，间隔 20ms~10.24s，广播数据最多 31 字节、扫描响应再加 31；中心设备扫描后发 CONNECT_IND 建立连接。</p>`,
+        core: `<p>BLE 外围设备在 37/38/39 三个信道周期广播，间隔 20ms~10.24s，广播数据最多 31 字节、扫描响应再加 31；主动扫描会发 SCAN_REQ 读扫描响应，被动扫描只收广播。</p>`,
         answer: `<p><b>广播：</b>Peripheral 在 <b>37、38、39</b> 三个广播信道（2402、2426、2480MHz）上周期性发送广播 PDU。每个广播事件会在三个信道上各发一次（或按配置），间隔称为 <b>Advertising Interval</b>，范围 20ms~10.24s，单位 0.625ms。广播类型主要有：</p>
 <ul>
 <li><b>ADV_IND</b>：可连接、可扫描，最常用。</li>
@@ -579,7 +579,7 @@ void ble_report_batched(const sample_t *s, int n)
         point: "吞吐 = 每连接事件包数 × 每包载荷 / 间隔；MTU、DLE、2M PHY、Notify 与连接参数的组合优化。",
         q: `<p>面试官：你的 BLE 设备传数据很慢，手机端一包只能收 20 字节。怎么把吞吐提上去？延迟又该怎么降？</p>`,
         exam: `<p>考察是否理解 BLE 吞吐的构成。能算清“默认 20 字节 × 每事件 1 包 / 30ms”有多低，并给出 MTU/DLE/PHY/Notify 的组合，就很好。</p>`,
-        core: `<p>BLE 默认 MTU 23、有效载荷 20 字节、30ms 间隔，吞吐只有约 667B/s；提高 MTU 和 DLE、每事件多发、缩短间隔、用 Notify 和 2M PHY 可到几十到几百 KB/s。</p>`,
+        core: `<p>BLE 默认 MTU 23、有效载荷 20 字节、30ms 间隔，吞吐只有约 667B/s；提高 MTU 和 DLE、每事件多发、缩短间隔、用 Notify 和 2M PHY 可到几十到几百 KB/s，延迟靠缩短连接间隔。</p>`,
         answer: `<p><b>先算默认值有多低：</b>ATT MTU 默认 23，实际载荷 20 字节；连接间隔 30ms，每个连接事件通常只发 1 包。吞吐 ≈ 20B / 30ms ≈ <b>667 B/s ≈ 5.3 kbps</b>。这就是“BLE 很慢”的来源。</p>
 <p><b>吞吐公式：</b><code>吞吐 = 每个连接事件的包数 × 每包有效载荷 / 连接间隔</code>。四个变量都能优化：</p>
 <ol>

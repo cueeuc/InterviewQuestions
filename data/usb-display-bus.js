@@ -52,7 +52,7 @@
         point: "考察设备接入、复位、地址分配、描述符读取的完整流程，以及控制/中断/批量/等时传输的语义差异。",
         q: `<p>面试官：一个 USB 设备插上电脑，<strong>从插入到能用，中间发生了什么？</strong>端点是什么？<strong>四种传输类型分别用在什么场合？</strong></p>`,
         exam: `<p>枚举是 USB 的“见面流程”，能按顺序说出复位、取设备描述符、分配地址、取配置描述符、设置配置，说明你看过协议而不是只会调库。四种传输类型则考察你对“带宽、延迟、可靠性”取舍的理解。</p>`,
-        core: `<p>USB 枚举是设备上拉 D+、主机复位、读设备描述符、分配地址、读配置描述符、SET_CONFIGURATION，最后发类请求；EP0 是双向控制端点。</p>`,
+        core: `<p>USB 枚举是设备上拉 D+、主机复位、读设备描述符、分配地址、读配置描述符、SET_CONFIGURATION，最后发类请求；EP0 是双向控制端点。四种传输是控制（配置设备）、中断（小量低延迟）、批量（大文件）、等时（音视频）。</p>`,
         answer: `<p><b>枚举流程（全速设备）：</b></p>
 <ol>
 <li><b>接入</b>：设备在 D+ 上拉一个 1.5kΩ 电阻到 3.3V，主机检测到电平变化，知道有设备插入（低速设备拉的是 D−）。</li>
@@ -124,7 +124,7 @@
         point: "考察三类 USB 类的端点结构、驱动依赖、吞吐与延迟特性，以及虚拟串口在缓冲区、流控、DTR 上的坑。",
         q: `<p>面试官：<strong>CDC、HID、MSC 这三种 USB 设备有什么区别？</strong>我要做一个 USB 转串口，选哪个类？<strong>实际做的时候要注意什么？</strong></p>`,
         exam: `<p>这题考的是“按需求选类”。要免驱、数据量小，选 HID；要虚拟串口、兼容串口工具，选 CDC；要大容量存储，选 MSC。能说出各自的端点和吞吐上限，就比只会“加个 USB 库”强。</p>`,
-        core: `<p>CDC-ACM 枚举成虚拟串口、Win10 免驱；HID 靠报告描述符、真正免驱但吞吐低；MSC 枚举成磁盘、走 SCSI 和批量传输。</p>`,
+        core: `<p>CDC-ACM 枚举成虚拟串口、Win10 免驱；HID 靠报告描述符、真正免驱但吞吐低；MSC 枚举成磁盘、走 SCSI 和批量传输。USB 转串口选 CDC-ACM，要注意端点缓冲和波特率只是虚拟的。</p>`,
         answer: `<p><b>三类的定位：</b></p>
 <ul>
 <li><b>CDC（Communication Device Class）</b>：通信设备类，最常用的是 CDC-ACM（抽象控制模型），枚举出来就是一个虚拟串口。它有两个接口：一个通信接口（控制/通知），一个数据接口（批量 IN/OUT）。Windows 10 之后自带 <code>usbser.sys</code>，基本免驱；老系统需要 INF。</li>
@@ -227,7 +227,7 @@ void cdc_bridge_poll(void)
         point: "考察显示驱动、tick、输入、内存四要素，flush 回调与 DMA 的配合，以及局部缓冲/双缓冲的取舍。",
         q: `<p>面试官：在一块 SPI 屏上移植 LVGL，<strong>要做哪几件事？</strong>它的刷新是怎么触发的？<strong>脏矩形和双缓冲怎么配？</strong></p>`,
         exam: `<p>移植本身不难，难在“刷得动、不撕裂、不卡”。能说清 <code>flush_cb</code> 什么时候调、<code>lv_display_flush_ready</code> 什么时候回、缓冲区开多大，说明你真的调过性能。</p>`,
-        core: `<p>LVGL 要初始化 display、tick、input 和内存，flush_cb 把渲染结果送屏；脏矩形只重绘变化区域，DMA 时 flush_cb 启动后要立刻返回。</p>`,
+        core: `<p>LVGL 要初始化 display、tick、input 和内存，flush_cb 把渲染结果送屏；脏矩形只重绘变化区域，双缓冲在 flush 启动 DMA 后立即返回、DMA 完成再切缓冲。</p>`,
         answer: `<p><b>移植四件事：</b></p>
 <ol>
 <li><b>显示</b>：创建 display 对象，设置分辨率、颜色格式，注册 <code>flush_cb</code>；在回调里把一块像素写到屏上。</li>

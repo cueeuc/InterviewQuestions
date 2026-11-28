@@ -133,7 +133,7 @@ static const struct file_operations demo_fops = {
         point: "资源隔离与共享、上下文切换开销，以及 IPC 的适用场景。",
         q: `<p>面试官：<strong>进程和线程</strong>有什么区别？Linux 里创建线程用哪个系统调用？进程间通信有哪些方式，各自适合什么场景？</p>`,
         exam: `<p>考察操作系统基础。能说清“进程有独立地址空间，线程共享地址空间”“线程切换开销小但需要自己同步”“Linux 用 clone 实现，线程本质是共享资源的进程”，说明理解得比较深。</p>`,
-        core: `<p>进程是资源分配单位、有独立地址空间，线程是调度单位、共享地址空间；Linux 线程本质是 clone 出来的共享资源的进程。</p>`,
+        core: `<p>进程是资源分配单位、有独立地址空间，线程是调度单位、共享地址空间；Linux 线程本质是 clone 出来的共享资源的进程。进程间通信有管道、消息队列、共享内存、信号和 socket，本机大数据用共享内存加信号量，跨机用 socket。</p>`,
         answer: `<p>进程是资源分配的基本单位，有独立的虚拟地址空间、文件描述符表、信号处理等；线程是调度的基本单位，同一进程内的线程共享地址空间和文件描述符，但各有独立的栈和寄存器。</p>
 <p>因为共享地址空间，线程间通信只需读写同一块内存，速度快，但必须自己做同步（互斥锁、条件变量），否则会有竞态。进程间隔离好，一个崩溃不影响另一个，但通信需要内核介入，开销大。</p>
 <p>Linux 没有单独的“创建线程”系统调用，<code>pthread_create</code> 底层是 <code>clone()</code>，通过参数决定共享哪些资源（地址空间、文件描述符、信号处理等）。所以 Linux 的线程本质上是“共享资源的进程”。</p>
@@ -241,7 +241,7 @@ shared_t *shm_create(void)
         point: "设备号、file_operations、cdev 注册、open/read/write 的实现与用户态交互。",
         q: `<p>面试官：写一个<strong>字符设备驱动</strong>需要哪几步？<code>file_operations</code> 里的函数什么时候被调用？设备节点是怎么创建的？</p>`,
         exam: `<p>考察 Linux 驱动的基本功。能说清“申请设备号 → 初始化 cdev → 注册 → 创建类/设备节点”“用户 open 对应驱动的 open”“主次设备号的作用”，说明你写过实际驱动。</p>`,
-        core: `<p>字符设备驱动要申请设备号、注册 cdev 和 file_operations、创建设备节点；主设备号标识驱动、次设备号标识同一驱动下的实例。</p>`,
+        core: `<p>字符设备驱动要申请设备号、注册 cdev 和 file_operations、创建设备节点；主设备号标识驱动、次设备号标识同一驱动下的实例。fops 的 open/read/write/release 在对应系统调用时被调用。</p>`,
         answer: `<p>基本步骤是：申请设备号（<code>alloc_chrdev_region</code> 动态或 <code>register_chrdev_region</code> 静态）；初始化并注册 <code>cdev</code>，绑定 <code>file_operations</code>；创建设备类和设备节点（<code>class_create</code> + <code>device_create</code>），这样 udev/mdev 会自动在 <code>/dev</code> 下生成节点；最后在模块退出时反向释放。</p>
 <p>用户态 <code>open("/dev/xxx")</code> 时，VFS 根据设备节点的主设备号找到对应的 cdev，调用驱动的 <code>open</code>；<code>read</code>/<code>write</code> 分别对应 <code>read</code>/<code>write</code>；<code>close</code> 对应 <code>release</code>。</p>
 <p>主设备号标识驱动，次设备号标识同一驱动下的不同设备实例。比如两个串口可以共用一个主设备号，用次设备号区分。</p>`,
@@ -400,7 +400,7 @@ MODULE_LICENSE("GPL");`
         point: "硬件描述与代码分离、compatible 匹配、资源获取 API。",
         q: `<p>面试官：为什么要有<strong>设备树</strong>？它解决了什么问题？驱动怎么从设备树里拿到寄存器地址和中断号？</p>`,
         exam: `<p>考察对 Linux 驱动模型的现代理解。能说清“以前板级文件把硬件信息写死在 C 代码里，换板子要改内核”“设备树用数据描述硬件，驱动通过 compatible 匹配”，说明你跟上主流做法。</p>`,
-        core: `<p>设备树把板级硬件描述从内核代码里抽出来，编译成 dtb 由 bootloader 传给内核；驱动靠 compatible 匹配，挂 I2C 下就用 i2c_driver。</p>`,
+        core: `<p>设备树把板级硬件描述从内核代码里抽出来，编译成 dtb 由 bootloader 传给内核；驱动靠 compatible 匹配，用 of_property_read_u32 取寄存器、用 platform_get_irq 取中断。</p>`,
         answer: `<p>在设备树之前，ARM Linux 用“板级文件”（board file）描述硬件：哪个 I2C 上挂了什么设备、寄存器地址是多少、用哪个中断，全部写在 C 代码里。每换一块板子就要改内核、重新编译，内核里堆积了大量板级代码。</p>
 <p>设备树把硬件描述抽成独立的文本文件（.dts），编译成二进制（.dtb）后由 bootloader 传给内核。内核启动时解析设备树，创建对应的 device，再和 driver 匹配。这样同一份内核可以支持多块板子，只换 dtb 即可。</p>
 <p>匹配靠 <code>compatible</code> 属性：设备树节点里写 <code>compatible = "vendor,device"</code>，驱动的 <code>of_match_table</code> 里列出支持的字符串，两者一致就调用 probe。</p>
@@ -628,7 +628,7 @@ set(CMAKE_C_FLAGS "\${CMAKE_C_FLAGS} -Os -Wall -Wextra")`
         point: "BootROM → SPL → U-Boot → 内核 → 根文件系统 → init 的完整链路。",
         q: `<p>面试官：一块 ARM Linux 板子<strong>上电后</strong>，到应用程序跑起来，中间经历了哪些阶段？U-Boot 做了什么事？根文件系统是必须的吗？</p>`,
         exam: `<p>考察对整个系统启动链路的理解。能说清“BootROM 加载 SPL，SPL 初始化 DDR 后加载 U-Boot，U-Boot 加载内核和 dtb，内核挂载根文件系统并启动 init”，说明你做过系统集成。</p>`,
-        core: `<p>启动链是 BootROM→SPL→U-Boot→内核→init；SPL 先初始化 DDR 再把完整 U-Boot 搬进内存，内核最后挂根文件系统并启动 init。</p>`,
+        core: `<p>启动链是 BootROM→SPL→U-Boot→内核→init；SPL 先初始化 DDR 再把完整 U-Boot 搬进内存，内核最后挂根文件系统并启动 init。根文件系统必须有，否则内核找不到 init 会 panic，除非用内建 initramfs。</p>`,
         answer: `<p>典型链路是：</p>
 <p><strong>BootROM</strong>：芯片内部的固化代码，根据启动引脚（SD 卡、eMMC、SPI Flash）加载第一级引导程序。它只认识有限的格式，且容量很小。</p>
 <p><strong>SPL</strong>（二级程序加载器）：因为 BootROM 加载不了完整 U-Boot（DDR 还没初始化），先加载一个精简版 SPL，它初始化 DDR、时钟、串口，然后把完整 U-Boot 搬到 DDR 运行。</p>
@@ -1210,7 +1210,7 @@ irqreturn_t my_isr(int irq, void *dev)
         point: "sysfs 结构化展示设备/驱动/总线，procfs 偏进程和内核状态；属性用 show/store 实现。",
         q: `<p>面试官：想在 /sys 下暴露一个可读写的驱动参数，怎么实现？为什么不用 procfs？</p>`,
         exam: `<p>考察内核与用户态接口设计。能说出“sysfs 一个属性一个文件、show/store 回调、设备模型绑定”，就很好。</p>`,
-        core: `<p>sysfs 是内核设备模型的结构化视图，一个文件一个属性；show/store 跑在进程上下文可以睡眠，但要校验输入、注意 PAGE_SIZE 限制。</p>`,
+        core: `<p>sysfs 是内核设备模型的结构化视图，一个文件一个属性，show/store 跑在进程上下文可以睡眠但要校验输入、注意 PAGE_SIZE；procfs 是进程和杂项信息、接口不稳定，不适合放设备参数。</p>`,
         answer: `<p><b>sysfs</b> 是内核设备模型的结构化视图，按“总线/设备/驱动/类”组织，每个文件对应一个属性，通常一个文件只表达一个值。适合暴露设备配置、状态。</p>
 <p><b>procfs</b> 早期用于进程信息，后来也被驱动滥用存放各种状态；它的结构松散，不适合结构化设备信息。新驱动应优先用 sysfs。</p>
 <p><b>实现方式：</b></p>
@@ -1302,7 +1302,7 @@ ATTRIBUTE_GROUPS(my);
         point: "SPL/TPL 初始化 DRAM，主 U-Boot 加载内核和设备树，bootcmd 决定启动方式。",
         q: `<p>面试官：板子上电后 U-Boot 做了什么？为什么有的平台有 SPL，有的没有？</p>`,
         exam: `<p>考察嵌入式 Linux 启动链。能说出“ROM → SPL → U-Boot → kernel → rootfs”，以及 SPL 的作用，就很好。</p>`,
-        core: `<p>启动链是 ROM→SPL→U-Boot→kernel→rootfs；SPL 存在是因为片内 SRAM 放不下完整 U-Boot，必须先初始化 DRAM；bootargs 由 U-Boot 传给内核。</p>`,
+        core: `<p>U-Boot 初始化 DDR、时钟和串口，把内核、设备树和根文件系统加载到内存并传 bootargs；SPL 是因为片内 SRAM 放不下完整 U-Boot，需要先初始化 DRAM 再搬。</p>`,
         answer: `<p><b>典型启动链：</b></p>
 <ol>
 <li><b>片内 ROM</b>：根据启动引脚从 SD/eMMC/NAND/SPI Flash 读取第一阶段引导程序；</li>

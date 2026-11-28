@@ -45,7 +45,7 @@
         point: "集成度与是否跑操作系统的差异，以及选型时的判断依据。",
         q: `<p>面试官：<strong>MCU、MPU、SoC</strong> 分别是什么？有什么区别？你做项目时怎么选？</p>`,
         exam: `<p>考察对整个嵌入式硬件版图的认知。能说清“MCU 片上集成 Flash 和 RAM，通常跑裸机或 RTOS；MPU 只有处理器核，需要外挂 DDR，跑 Linux”，并且举出具体型号，说明你有实际视野。</p>`,
-        core: `<p>MCU 集成 CPU、Flash、SRAM 和外设，实时性好、功耗低；MPU 只有内核和 Cache、需外挂 DDR，跑 Linux；SoC 再集成 GPU、NPU 等完整系统。</p>`,
+        core: `<p>MCU 把 CPU、Flash、SRAM 和外设集成在一颗芯片里，实时性好、功耗低；MPU 只有内核和 Cache、要外挂 DDR 跑 Linux；SoC 再集成 GPU、NPU 等完整系统。做实时控制选 MCU，跑操作系统和多媒体选 MPU 或 SoC。</p>`,
         answer: `<p>MCU 是微控制器，把 CPU 核、Flash、SRAM、各种外设（GPIO、UART、ADC、定时器）集成在一颗芯片里，上电就能跑，不需要外部存储。典型代表是 STM32F103、GD32、NXP 的 LPC 系列，通常跑裸机或 FreeRTOS。</p>
 <p>MPU 是微处理器，通常只包含 CPU 核和少量缓存，需要外挂 DDR 内存和 Flash 才能工作，主频高、算力强，跑 Linux 或 Android。典型代表是 i.MX6、全志、瑞芯微的芯片。</p>
 <p>SoC 是片上系统，集成的范围更广，除了 CPU 还可能包含 GPU、NPU、视频编解码、Wi-Fi/蓝牙基带等，一颗芯片就是一个完整系统。手机芯片、智能音箱主控都属于 SoC。</p>
@@ -100,7 +100,7 @@
         point: "R0-R15 的分工、特殊寄存器，以及 xPSR 中条件标志和 IPSR 的作用。",
         q: `<p>面试官：Cortex-M 内核有哪些<strong>寄存器</strong>？R13、R14、R15 分别是什么？xPSR 里都存了什么？中断号从哪里读？</p>`,
         exam: `<p>考察你是否了解内核的资源模型。能说出“R13 是栈指针、R14 是链接寄存器、R15 是 PC”“xPSR 的 IPSR 字段存当前异常号”，说明你读过内核手册；再补一句“进入异常时硬件自动压栈这 8 个寄存器”，就更完整了。</p>`,
-        core: `<p>R0-R12 是通用寄存器，R13 是栈指针 SP、R14 是 LR、R15 是 PC；xPSR 存条件标志和当前异常号，IPSR 可判断是否在中断里。</p>`,
+        core: `<p>R0-R12 是通用寄存器，R13 是栈指针 SP、R14 是 LR、R15 是 PC；xPSR 存条件标志和当前异常号，IPSR 的低 9 位就是异常号，减去 16 得到外设中断号。</p>`,
         answer: `<p>Cortex-M 有 16 个通用寄存器 R0-R15。R0-R12 是通用数据寄存器，其中 R0-R3 在函数调用时用于传参和返回值，属于调用者保存；R4-R11 是被调用者保存，函数要用就得先压栈。</p>
 <p>R13 是栈指针 SP，在 Cortex-M 上物理上有两个：MSP 主栈指针和 PSP 进程栈指针，具体用哪个由 CONTROL 寄存器决定。R14 是链接寄存器 LR，保存函数返回地址；在异常里它保存的是 EXC_RETURN 特殊值。R15 是程序计数器 PC。</p>
 <p>特殊寄存器有三个：xPSR 程序状态寄存器、PRIMASK/BASEPRI/FAULTMASK 中断屏蔽寄存器、CONTROL 控制寄存器。</p>
@@ -159,7 +159,7 @@
         point: "双堆栈的隔离价值、CONTROL 寄存器切换，以及 RTOS 如何利用 PSP。",
         q: `<p>面试官：<strong>MSP 和 PSP</strong> 分别是什么？为什么 Cortex-M 要设计两个栈指针？FreeRTOS 是怎么用它们的？如果任务栈溢出会怎样？</p>`,
         exam: `<p>这是 RTOS 移植的核心知识点。能说清“中断用 MSP、任务用 PSP，实现栈隔离”“CONTROL 寄存器切换”“异常入口自动用 MSP”，说明你理解上下文切换的底层。</p>`,
-        core: `<p>MSP 复位后和异常处理使用、PSP 给任务使用，双栈可避免任务栈溢出直接踩坏中断现场；RTOS 在 PendSV 中切换 PSP。</p>`,
+        core: `<p>MSP 供复位后和异常处理使用，PSP 供任务使用，双栈能避免任务栈溢出时直接踩坏中断现场；RTOS 在 PendSV 里把 PSP 换成下一个任务的栈。任务栈真溢出会踩坏相邻内存或触发 HardFault，要靠栈高水位和 MPU 边界来查。</p>`,
         answer: `<p>MSP 是主栈指针（Main Stack Pointer），复位后默认使用它，异常处理也强制使用它。PSP 是进程栈指针（Process Stack Pointer），通常给用户任务使用。</p>
 <p>设计两个栈的目的是<strong>隔离</strong>：中断服务程序用独立的 MSP，即使某个任务的栈溢出，也不会立刻破坏中断的现场，系统还有机会记录错误或复位。如果没有隔离，任务栈溢出会直接踩坏中断栈，故障现象会非常混乱。</p>
 <p>FreeRTOS 的做法是：启动调度器时把所有任务的栈都初始化好，每个任务的 TCB 里保存它的栈顶；任务运行时 CONTROL.SPSEL 置 1 使用 PSP，异常发生时硬件自动切到 MSP。上下文切换时，PendSV 里保存当前任务的 PSP 到 TCB，再从下一个任务的 TCB 恢复 PSP。</p>
@@ -268,7 +268,7 @@ uint32_t stack_high_water(const uint32_t *stack_low, uint32_t words)
         point: "压栈顺序、向量取址、EXC_RETURN 编码与尾链，是理解 RTOS 切换的关键。",
         q: `<p>面试官：Cortex-M 响应中断时，<strong>硬件自动做了哪些事？</strong>压栈压了哪几个寄存器？EXC_RETURN 里存的是什么？为什么说它让 RTOS 的上下文切换变得很轻量？</p>`,
         exam: `<p>这是内核机制的深水区。能说清“8 个寄存器自动压栈”“LR 存 EXC_RETURN 编码返回行为”“PendSV 里手动保存 R4-R11”，基本可以判断你写过或读过 RTOS 移植层。</p>`,
-        core: `<p>响应中断时硬件压 R0-R3、R12、LR、PC、xPSR 八个寄存器，取向量表入口并写 EXC_RETURN；bit2 选 PSP/MSP，bit4 为 0 是扩展帧、要恢复浮点现场。</p>`,
+        core: `<p>响应中断时硬件自动压 R0-R3、R12、LR、PC、xPSR 八个寄存器，从向量表取入口并写 EXC_RETURN；bit2 选 PSP 或 MSP，bit4 为 0 是扩展帧、要恢复浮点现场，所以 RTOS 切换只需换栈指针。</p>`,
         answer: `<p>硬件自动做四件事：第一，把 R0-R3、R12、LR、PC、xPSR 这 8 个寄存器压入当前栈（线程模式用 PSP，处理模式用 MSP）；第二，从向量表取出异常处理函数的地址装入 PC；第三，把 LR 设置为 EXC_RETURN 特殊值；第四，更新 IPSR 为当前异常号。</p>
 <p>EXC_RETURN 是一个高 24 位全 1 的特殊值，低几位编码了返回信息：bit2 表示返回后用什么栈（1 用 PSP，0 用 MSP），bit3 表示返回后是线程模式还是处理模式，bit4 是帧类型：0 表示扩展帧，出栈时会额外恢复 S0-S15、FPSCR 等浮点现场；1 表示基本帧，不恢复浮点。比如 0xFFFFFFF9 是基本帧、返回线程模式、用 MSP；0xFFFFFFFD 是基本帧、返回线程模式、用 PSP；0xFFFFFFED 是扩展帧、返回线程模式、用 PSP。</p>
 <p>返回时执行 <code>BX LR</code>，硬件识别到这个特殊值就自动出栈，恢复 8 个寄存器，回到被中断处。整个过程不需要软件写一行汇编。</p>
@@ -359,7 +359,7 @@ no_task:
         point: "优先级位宽、分组策略、抢占与子优先级的实际行为差异。",
         q: `<p>面试官：<strong>NVIC 的优先级</strong>是怎么定的？抢占优先级和子优先级有什么区别？如果两个中断同时到来会怎样？优先级数值越大越高还是越低？</p>`,
         exam: `<p>这是最容易配错的地方。能说清“Cortex-M 优先级数值越小越高”“高抢占优先级可以打断低抢占优先级”“子优先级只影响同时挂起时的排队顺序，不影响抢占”，说明你踩过坑。</p>`,
-        core: `<p>优先级数值越小越高，STM32 通常 4 位 16 级；分成抢占优先级和子优先级，抢占级决定能否嵌套，子优先级只在同时挂起时排序。</p>`,
+        core: `<p>优先级数值越小越高，STM32 通常 4 位、16 级；抢占优先级决定能否嵌套，子优先级只在同抢占级同时挂起时排序，两个中断同时到来先比抢占级、再比子优先级、再比中断号。</p>`,
         answer: `<p>Cortex-M 的优先级用寄存器里的若干位表示，STM32 一般实现 4 位，也就是 16 级。数值<strong>越小优先级越高</strong>，0 是最高。</p>
 <p>这 4 位可以分成“抢占优先级”和“子优先级”两部分，分组方式由 <code>NVIC_SetPriorityGrouping</code> 决定。比如分组 2 表示 2 位抢占、2 位子优先级，那么抢占级有 4 档、子优先级有 4 档。</p>
 <p>区别在于：<strong>抢占优先级决定能不能打断</strong>——高抢占优先级的中断可以打断正在执行的低抢占优先级中断，形成嵌套；<strong>子优先级只决定同时挂起时谁先执行</strong>，不能打断已经在执行的中断。</p>
@@ -446,7 +446,7 @@ static inline void exit_critical(void)
         point: "向量表、Reset_Handler、.data 拷贝、.bss 清零、SystemInit 与跳转 main。",
         q: `<p>面试官：芯片<strong>上电复位后</strong>，第一条指令从哪里取？启动文件里的 <code>Reset_Handler</code> 做了什么？为什么全局变量会被初始化为 0？</p>`,
         exam: `<p>这题把硬件复位、链接脚本、C 运行时初始化串起来了。能说清“从向量表取 MSP 和 PC”“拷贝 .data、清零 .bss”“调用 SystemInit 配时钟”，就理解了嵌入式程序的生命起点。</p>`,
-        core: `<p>复位后硬件从地址 0 取初始 MSP、地址 4 取复位向量；启动代码配时钟、拷 .data、清 .bss，最后进 main。</p>`,
+        core: `<p>复位后硬件从地址 0 取初始 MSP、地址 4 取复位向量；Reset_Handler 配时钟、拷 .data、清 .bss 后进 main。全局变量为 0 是因为 .bss 上电清零，C 标准也要求未初始化全局变量初值为 0。</p>`,
         answer: `<p>Cortex-M 复位时，硬件从地址 0 处取第一个字作为初始 MSP 值，从地址 4 处取第二个字作为复位向量（Reset_Handler 的地址），然后跳过去执行。所以向量表的头两项必须是栈顶地址和复位函数地址。</p>
 <p><code>Reset_Handler</code> 通常做四件事：第一，调用 <code>SystemInit</code> 配置时钟和外部存储器；第二，把 <code>.data</code> 段的初值从 Flash 拷贝到 SRAM；第三，把 <code>.bss</code> 段清零；第四，调用 <code>__libc_init_array</code> 执行 C++ 全局构造函数，最后跳转到 <code>main</code>。</p>
 <p>全局变量被初始化为 0 不是语言魔法，而是启动代码把 .bss 段整块清零的结果。同理，初始化为非零的全局变量能保持初值，是因为启动代码把 Flash 里的初值拷贝到了 SRAM。</p>`,
@@ -544,7 +544,7 @@ call_main:
         point: "SysTick 的结构、重装载值计算，以及它在任务调度与延时中的作用。",
         q: `<p>面试官：<strong>SysTick</strong> 是什么？为什么 RTOS 都用它做系统节拍？重装载值怎么算？如果 SysTick 中断被延迟了，系统时间会不准吗？</p>`,
         exam: `<p>考察对时基机制的理解。能说出“24 位递减计数器、内核私有、不占外设”“1ms 节拍如何算重装载值”“节拍丢失会导致时间漂移”，说明你理解 RTOS 的时间管理。</p>`,
-        core: `<p>SysTick 是内核 24 位递减计数器，LOAD = 时钟频率/节拍频率 - 1，72MHz、1ms 就是 71999；关中断超过一拍会丢节拍、系统时间变慢。</p>`,
+        core: `<p>SysTick 是内核里的 24 位递减计数器，LOAD = 时钟频率/节拍频率 - 1，72MHz、1ms 就是 71999；它不占外设、移植方便。中断被关超过一拍就会丢节拍，系统时间变慢。</p>`,
         answer: `<p>SysTick 是 Cortex-M 内核自带的一个 24 位递减计数器，所有 Cortex-M 芯片都有，不占用厂商外设资源，所以移植 RTOS 时用它做时基最方便。</p>
 <p>它有三个寄存器：CTRL 控制使能和中断、LOAD 存重装载值、VAL 是当前计数值。计数到 0 时自动重装载并产生中断（如果使能）。</p>
 <p>重装载值的算法是：<code>LOAD = 系统时钟 / 节拍频率 - 1</code>。比如 72MHz、1ms 节拍，就是 72000000 / 1000 - 1 = 71999。</p>
@@ -663,7 +663,7 @@ uint64_t uptime_ms(void)
         point: "从指令集、流水线、DSP/FPU、MPU、Cache 几个维度区分，按算力和成本选型。",
         q: `<p>面试官：Cortex-M 有 M0、M3、M4、M7 几个系列，它们差在哪？做电机控制该选哪个？</p>`,
         exam: `<p>考察对 ARM 产品线的熟悉度。能说出 M4 有 DSP 指令和可选 FPU、M7 有 Cache 和双发射，并结合场景选型，就很好。</p>`,
-        core: `<p>M0/M0+ 指令少、无硬件除法、功耗最低；M3 有硬件除法和位带；M4 加 DSP 和单精度 FPU；M7 是双发射带 Cache，性能最高。</p>`,
+        core: `<p>M0/M0+ 指令少、无硬件除法、功耗最低；M3 有硬件除法和位带；M4 加 DSP 指令和单精度 FPU；M7 双发射带 Cache、性能最高。电机控制选 M4，FOC 里的乘加和浮点运算能靠 DSP 指令和 FPU 加速。</p>`,
         answer: `<p>几个关键差异：</p>
 <ul>
 <li><b>Cortex-M0/M0+</b>：ARMv6-M，只有 56 条指令，M0 是 3 级流水线、M0+ 精简为 2 级，两者都没有硬件除法指令（除法由 <code>__aeabi_uidiv</code> 等软件库实现），MPU 为可选项（M0+ 支持 8 区 MPU），成本最低、功耗最低。适合简单控制和替代 8 位机。</li>
@@ -720,7 +720,7 @@ uint64_t uptime_ms(void)
         point: "特权级可访问所有资源，用户级受限；MPU 按区域配置访问权限，防止越界破坏。",
         q: `<p>面试官：RTOS 里任务运行在什么级别？MPU 是怎么防止一个任务踩坏另一个任务的内存的？</p>`,
         exam: `<p>考察对保护机制的理解。能说出特权级切换、MPU 区域属性、以及 MPU 并不能替代 MMU，就很好。</p>`,
-        core: `<p>特权级可配置 NVIC、MPU 和系统寄存器，用户级受限；MPU 按区域设读写执行权限，越权触发 MemManage Fault，但它只做区域检查、没有地址翻译。</p>`,
+        core: `<p>任务一般跑在用户级或特权级：特权级能配 NVIC、MPU 和系统寄存器，用户级受限；MPU 按区域设读写执行权限，越权触发 MemManage Fault，但它只做区域检查、没有地址翻译。</p>`,
         answer: `<p><b>两个特权级：</b></p>
 <ul>
 <li><b>特权级（Privileged）</b>：可以访问所有寄存器、配置 NVIC/MPU/SCB，执行所有指令。</li>
@@ -800,7 +800,7 @@ void mpu_config_region(uint32_t base, uint32_t size, uint32_t attr)
         point: "PendSV 可挂起、优先级最低，用于在中断退出时安全地完成上下文切换，避免打断中断。",
         q: `<p>面试官：FreeRTOS 切换任务为什么不用 SVC 或 SysTick 直接切，而要用 PendSV？</p>`,
         exam: `<p>考察对异常机制和 RTOS 移植的理解。能说出“PendSV 优先级最低、可延迟到所有中断处理完再执行”，就抓住了核心。</p>`,
-        core: `<p>PendSV 优先级最低、可延迟执行，SysTick 只更新时基并挂起它，等所有中断处理完再做上下文切换，避免打断正在执行的 ISR。</p>`,
+        core: `<p>PendSV 优先级最低、可以延后执行，SysTick 只更新时基并把它挂起，等所有中断处理完再做上下文切换，避免在 ISR 里切换任务。</p>`,
         answer: `<p><b>PendSV（可挂起系统调用）</b>是一个可以通过软件触发、也可以延迟执行的异常。它的典型用法是：</p>
 <ol>
 <li>SysTick 中断里只做时基更新，然后挂起 PendSV（写 ICSR 的 PENDSVSET 位）；</li>
@@ -877,7 +877,7 @@ void SysTick_Handler(void)
         point: "SVC 触发同步异常进入特权级，通过立即数或寄存器传递调用号，由内核分发处理。",
         q: `<p>面试官：用户级任务想调用内核服务，为什么不能直接函数调用？SVC 是怎么完成提权的？</p>`,
         exam: `<p>考察对异常和特权级切换的理解。能说出“SVC 立即数编码调用号、异常入口读栈帧取参数”，就很好。</p>`,
-        core: `<p>用户任务执行 SVC 指令触发异常进入特权级，内核从栈帧取返回地址、读取调用号，再查表分发服务，返回值放 R0。</p>`,
+        core: `<p>用户任务不能直接调内核函数，因为那会绕过权限检查；执行 SVC 指令触发异常进入特权级，内核从栈帧取返回地址、读调用号，再查表分发服务，返回值放 R0。</p>`,
         answer: `<p>用户级任务不能直接访问内核数据和特权寄存器，否则保护机制就失效了。它必须通过<b>系统调用</b>请求内核代劳，SVC 就是入口。</p>
 <p><b>流程：</b></p>
 <ol>
@@ -954,7 +954,7 @@ void SVC_Handler_Main(uint32_t *svc_args)
         point: "四类 Fault 对应访问权限、总线错误、指令使用错误；未使能时都升级为 HardFault。",
         q: `<p>面试官：Cortex-M 有几种 Fault？为什么有时候明明越界访问，却只进 HardFault，看不出具体原因？</p>`,
         exam: `<p>考察异常模型的细节，也是 HardFault 调试的基础。能说出“子 Fault 默认未使能，会升级为 HardFault”，说明真的查过。</p>`,
-        core: `<p>HardFault 兜底所有未处理异常，MemManage 管 MPU 越权，BusFault 管总线错误，UsageFault 管未定义指令、非对齐等；要开 SHCSR 对应使能位才单独上报。</p>`,
+        core: `<p>Cortex-M 有 HardFault、MemManage、BusFault、UsageFault 四类；HardFault 兜底所有没单独使能的异常，要开 SHCSR 里对应使能位，MemManage 等才会单独上报。</p>`,
         answer: `<p>Cortex-M 有四类 Fault：</p>
 <ul>
 <li><b>HardFault</b>：所有未被其它 Fault 处理的错误最终都到这里，是最后的兜底。</li>
@@ -1037,7 +1037,7 @@ void fault_dump(void)
         point: "尾链让连续中断省去出栈再入栈，迟到让高优先级中断提前得到服务。",
         q: `<p>面试官：中断处理完后如果立刻又来一个中断，CPU 会先恢复现场再重新压栈吗？尾链和迟到是什么意思？</p>`,
         exam: `<p>考察对中断响应细节的理解。能说清“尾链省去恢复再保存”“迟到是高优先级抢占压栈阶段”，说明读懂了异常模型。</p>`,
-        core: `<p>尾链是异常返回时直接跳到另一个挂起异常，省去出栈再入栈；迟到是压栈完成后来了更高优先级异常，直接改用新向量，两者都降低中断延迟。</p>`,
+        core: `<p>尾链是异常返回时直接跳到另一个已挂起异常，省去出栈再入栈；迟到是压栈完成后来了更高优先级异常，直接改用新向量入口，两者都缩短中断延迟。</p>`,
         answer: `<p><b>尾链（Tail-chaining）</b>：当一个异常处理完成、异常返回时，如果发现有另一个异常处于挂起状态，CPU 不会先出栈恢复再重新入栈，而是直接跳到新的异常处理程序，省去 8 个寄存器的出栈和入栈。这个优化通常能省 6~12 个周期。</p>
 <p><b>迟到（Late-arriving）</b>：在异常入栈阶段（还没有开始执行 Handler），如果来了一个更高优先级的异常，CPU 会改为服务更高优先级的那个，而不是先执行低优先级的。因为压栈已经完成，直接取新的向量即可，代价很小。</p>
 <p>两者都是硬件对“连续异常”的优化，目的是降低中断延迟和抖动。对高频率中断（如电机 PWM、编码器）影响明显。</p>
@@ -1081,7 +1081,7 @@ void fault_dump(void)
         point: "关中断、设置 MSP 为 APP 栈顶、设置 VTOR 为 APP 向量表、跳转到复位向量。",
         q: `<p>面试官：写一个 Bootloader，跳转到 APP 的代码怎么写？漏掉哪一步会导致 APP 能跑但中断不正常？</p>`,
         exam: `<p>考察 IAP 的完整流程。能说出 MSP、VTOR、关中断、跳转地址这几个关键点，并解释各自作用，就很好。</p>`,
-        core: `<p>跳转 APP 前要先关中断，把 APP 向量表第 0 项写入 MSP、VTOR 指向 APP 向量表，再从第 1 项取复位向量调用；漏掉 MSP 或 VTOR 会一进中断就跑飞。</p>`,
+        core: `<p>跳转前先关中断，把 APP 向量表第 0 项写入 MSP、VTOR 指向 APP 向量表，再从第 1 项取复位向量调用；漏掉 MSP 或 VTOR 会导致 APP 能跑但一进中断就跑飞。</p>`,
         answer: `<p>跳转前要确认 APP 区域有有效固件（检查栈顶是否在 RAM 范围、复位向量是否在 Flash 范围），然后按顺序：</p>
 <ol>
 <li><b>关闭全局中断</b>（<code>__disable_irq()</code>），关闭已使能的外设中断，避免跳转过程中被中断打断。</li>
@@ -1171,7 +1171,7 @@ int jump_to_app(void)
         point: "Thumb 是 16 位压缩编码，地址最低位用作状态位区分 ARM/Thumb，所以函数指针常带 1。",
         q: `<p>面试官：反汇编里经常看到函数地址是奇数（如 0x08000121），为什么？Cortex-M 只支持 Thumb 吗？</p>`,
         exam: `<p>考察指令集细节。能说出“最低位是 Thumb 状态位、跳转时硬件忽略最低位”，说明看过底层代码。</p>`,
-        core: `<p>Cortex-M 只支持 Thumb/Thumb-2，函数指针最低位为 1 表示 Thumb 状态；BX/BLX 会读取这一位切换状态，手动清掉可能直接 HardFault。</p>`,
+        core: `<p>Cortex-M 只支持 Thumb/Thumb-2，函数指针最低位为 1 表示 Thumb 状态；BX/BLX 会读这一位切换状态，手动清掉会按 ARM 状态解码而直接 HardFault。</p>`,
         answer: `<p><b>Thumb 指令集</b>是 ARM 的 16 位压缩编码，目的是提高代码密度。经典 ARM 指令固定 32 位，Thumb 用 16 位表示常用操作，代码体积能减少约 30%。</p>
 <p><b>Thumb-2</b> 在 Thumb 基础上混合 16 位和 32 位编码，兼顾密度和性能。Cortex-M 只支持 Thumb/Thumb-2，不支持经典 32 位 ARM 指令集。</p>
 <p><b>为什么地址是奇数：</b>ARM 用地址最低位表示指令集状态：</p>
@@ -1249,7 +1249,7 @@ uint32_t pure_addr(fn_t fn)
         point: "DSB 等完成、DMB 保顺序、ISB 清流水线；驱动里常见于 DMA、时钟切换、向量表修改。",
         q: `<p>面试官：你实际在什么代码里用过屏障指令？不加会出什么问题？</p>`,
         exam: `<p>考察工程经验。能结合 DMA 启动、时钟切换、Flash 编程、向量表重定位举出具体例子，比背定义更有说服力。</p>`,
-        core: `<p>DMA 启动前、切时钟后、改 VTOR 后、Flash 编程前都要用 DSB 等访存完成，改完向量表还要 ISB；漏屏障往往只在特定优化和负载下偶发。</p>`,
+        core: `<p>DMA 启动前、切时钟后、改 VTOR 后、Flash 编程前都要用 DSB 等访存真正完成，改完向量表还要 ISB 清流水线；漏屏障往往只在特定优化和负载下偶发。</p>`,
         answer: `<p>几个我实际用过的场景：</p>
 <p><b>1. 启动 DMA：</b>填充缓冲区后，必须 <code>DSB()</code> 确保数据真正写入内存，再写 DMA 启动寄存器。否则 DMA 可能读到旧数据。带 Cache 的芯片还要先 clean。</p>
 <p><b>2. 切换系统时钟：</b>写 RCC 寄存器切换 PLL 后，要等 <code>DSB()</code> 让写操作完成，再轮询就绪标志；切换完成后加 <code>ISB()</code>，保证后续指令按新时钟取指。</p>
@@ -1332,7 +1332,7 @@ int switch_to_pll(void)
         point: "CMSIS 是 ARM 定义的内核访问标准层，统一寄存器定义、启动流程和 RTOS 接口。",
         q: `<p>面试官：代码里常见的 <code>__NVIC_SetPriority</code>、<code>SysTick_Config</code> 是哪来的？CMSIS 解决了什么问题？</p>`,
         exam: `<p>考察对生态标准的了解。能说出“内核寄存器定义、启动文件、DSP 库、RTOS 接口”几个组成部分，就足够。</p>`,
-        core: `<p>CMSIS 统一了 Cortex-M 的内核寄存器、NVIC、SysTick 等接口，换同内核芯片不用改代码；但它只覆盖内核，外设仍由厂商头文件和 HAL 定义。</p>`,
+        core: `<p>它们来自 CMSIS，CMSIS 统一了 Cortex-M 的内核寄存器、NVIC、SysTick 接口，换同内核芯片不用改代码；但它只覆盖内核，外设仍由厂商头文件和 HAL 定义。</p>`,
         answer: `<p><b>CMSIS（Cortex Microcontroller Software Interface Standard）</b>是 ARM 定义的一套标准接口，让不同厂商的 Cortex-M 芯片在软件层面保持一致。</p>
 <p>主要包含：</p>
 <ul>
